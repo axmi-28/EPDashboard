@@ -241,8 +241,7 @@ function sect(parent, titleHTML, note) {
 }
 
 function lensSect(parent, title, tab) {
-  const d = sect(parent, title +
-    (tab.verb != null ? `<span class="sub">verbalizability = ${fmt(tab.verb)}</span>` : ""));
+  const d = sect(parent, title);
   const cols = document.createElement("div");
   cols.className = "lenscols";
   const mk = (name, toks, cls) => {

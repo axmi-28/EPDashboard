@@ -4,8 +4,7 @@ SAEDashboard's logits panel shows the tokens a feature direction most
 promotes and suppresses through the unembedding. The EP analogue applies the
 same readout to the exemplar direction and to the mean member direction, and
 — where a Jacobian lens exists for the model/layer — to the J-transported
-direction, whose flatness score ("verbalizability", 1 − H/ln|V|) says whether
-the vocab readout means anything at all for this region.
+direction.
 
 Weight loading is delegated to ``qwen_ep.lens_weights`` / ``jlens_weights``
 (HTTP range requests against the hub, npz-cached); the model is resolved from
@@ -29,15 +28,15 @@ def _model_key(model_id: str) -> str | None:
 
 def topk_stats(directions: np.ndarray, lens: dict, k: int,
                chunk: int = 256) -> dict:
-    """Top-k / bottom-k vocab ids plus full-vocab entropy and top-k mass.
+    """Top-k / bottom-k vocab ids plus the top-k probability mass.
 
     Directions are RMS-normalised before unembedding, so the softmax
-    temperature is canonical and entropies are comparable across regions.
+    temperature is canonical and masses are comparable across regions.
     """
     import torch
     w_u = torch.from_numpy(lens["W_U"])
     w_norm = torch.from_numpy(lens["w_norm"])
-    pos, neg, ents, mass = [], [], [], []
+    pos, neg, mass = [], [], []
     for s in range(0, len(directions), chunk):
         d = torch.from_numpy(directions[s:s + chunk].astype(np.float32))
         d = d / torch.sqrt((d * d).mean(-1, keepdim=True) + 1e-6) * w_norm
@@ -45,12 +44,9 @@ def topk_stats(directions: np.ndarray, lens: dict, k: int,
         top = torch.topk(logits, k, dim=-1).indices
         pos.extend(top.tolist())
         neg.extend(torch.topk(-logits, k, dim=-1).indices.tolist())
-        logp = torch.log_softmax(logits, dim=-1)
-        p = logp.exp()
-        ents.append((-(p * logp).sum(-1)).numpy())
+        p = torch.log_softmax(logits, dim=-1).exp()
         mass.append(p.gather(-1, top).sum(-1).numpy())
-    return {"pos": pos, "neg": neg,
-            "entropy": np.concatenate(ents), "mass": np.concatenate(mass)}
+    return {"pos": pos, "neg": neg, "mass": np.concatenate(mass)}
 
 
 class LensTables:
@@ -67,22 +63,16 @@ class LensTables:
                 "names; check tie_word_embeddings first)")
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.lens = load_lens(self.key, cache_dir)
-        self.ln_v = float(np.log(self.lens["W_U"].shape[0]))
         self.J = load_jlens(self.key, layer, cache_dir) if has_jlens(self.key) else None
         self.j_n_prompts = (jlens_n_prompts(self.key, layer, cache_dir)
                             if self.J is not None else 0)
-
-    def _verb(self, H: np.ndarray) -> np.ndarray:
-        return np.round(1.0 - H / self.ln_v, 3)
 
     def build(self, E: np.ndarray, means: np.ndarray, decode) -> list[dict]:
         """Per-region lens dict; ``decode`` maps a vocab id to its string."""
         def table(dirs):
             st = topk_stats(dirs, self.lens, self.k)
-            verb = self._verb(st["entropy"])
             return [{"pos": [decode(t) for t in st["pos"][i]],
                      "neg": [decode(t) for t in st["neg"][i]],
-                     "verb": float(verb[i]),
                      "mass": round(float(st["mass"][i]), 3)}
                     for i in range(len(dirs))]
 

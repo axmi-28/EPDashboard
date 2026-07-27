@@ -63,7 +63,7 @@ common ones as CLI flags). Highlights:
 - **projection histogram** — member reservoir vs corpus subsample
 - **distance-to-exemplar histogram** — region tightness over [0, θ]
 - **logit lens** — promoted/suppressed tokens for exemplar and mean member
-  direction, plus J-lens + verbalizability where a Jacobian lens exists
+  direction, plus J-lens where a Jacobian lens exists
 - **sequences** — closest members, near/mid/far distance bands, random draw;
   tokens colored by projection, region members underlined, firing token
   marked
