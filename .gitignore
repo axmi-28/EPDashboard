@@ -14,3 +14,11 @@ epdash_out/
 .DS_Store
 epdashboard/DECISIONS.md
 MODAL.md
+
+qwen_ep/*
+!qwen_ep/__init__.py
+!qwen_ep/adapter.py
+!qwen_ep/lens_weights.py
+!qwen_ep/jlens_weights.py
+modal_epdash.py
+epdash_out_27b/
