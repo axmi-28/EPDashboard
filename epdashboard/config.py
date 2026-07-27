@@ -61,8 +61,8 @@ class EPVisConfig:
     # ---------------------------------------------------------- panel sizes
     n_closest: int = 10             # sequences in the "closest members" group
     n_bands: int = 3                # distance bands over [0, θ]: near/mid/far
-    n_per_band: int = 5             # random sequences kept per band
-    n_random: int = 10              # sequences in the uniform random draw
+    n_per_band: int = 8             # random sequences kept per band
+    n_random: int = 16              # sequences in the uniform random draw
     #: Tokens shown left/right of the firing token (SAEDashboard: ``buffer``).
     buffer: tuple[int, int] = (10, 5)
     n_neighbors: int = 8            # nearest regions by exemplar cosine
@@ -75,6 +75,20 @@ class EPVisConfig:
     #: Uniform member reservoir per region (backs quantiles, the member
     #: projection histogram, and the random-draw sequence group).
     reservoir: int = 256
+
+    # ------------------------------------------------- EP-specific accumulators
+    # These have no SAEDashboard analogue: they describe the *partition* rather
+    # than a direction, and every one of them needs the assignment stream, so
+    # they are collected on every run whether or not a panel displays them yet
+    # (adding a panel later is a re-render; adding an accumulator is a rescan).
+    #: Runner-up competition graph is a dense (K, K) int32 count matrix, so it
+    #: is skipped above this K (8192 → 268 MB; 27B L55 p4 is K=5190).
+    comp_max_k: int = 8192
+    #: Competitors kept per region in the written record.
+    n_competitors: int = 8
+    #: A member is "contested" when its runner-up cell is within this fraction
+    #: of θ of its own — i.e. it sits near a Voronoi bisector, not in a core.
+    contested_eps: float = 0.1
 
     # --------------------------------------------------------------- output
     out_dir: str = "epdash_out"

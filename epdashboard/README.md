@@ -55,8 +55,11 @@ common ones as CLI flags). Highlights:
 ## Region card panels
 
 - **stats** — member count (build + rescan), density, coherence, mean
-  distance, projection moments
+  distance, projection moments, mean margin + contested share (cell shell)
+- **exemplar** — the first-arrival context that seeded the region
 - **nearest regions** — full-space exemplar cosine, cross-linked
+- **competitors** — which cells come *second* for this region's members
+  (the competition graph; not the same ranking as cosine neighbours)
 - **projection histogram** — member reservoir vs corpus subsample
 - **distance-to-exemplar histogram** — region tightness over [0, θ]
 - **logit lens** — promoted/suppressed tokens for exemplar and mean member

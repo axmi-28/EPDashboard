@@ -121,7 +121,8 @@ class RegionScan:
         # Uniform-without-replacement sampling = bottom-k on a random key.
         self.bands = [TopK(K, cfg.n_per_band, ("dist", "proj"))
                       for _ in range(cfg.n_bands)]
-        self.random = TopK(K, max(cfg.reservoir, cfg.n_random), ("dist", "proj"))
+        self.random = TopK(K, max(cfg.reservoir, cfg.n_random),
+                           ("dist", "proj", "margin"))
 
         self.n_member = np.zeros(K, dtype=np.int64)
         self.sum_proj = np.zeros(K, dtype=np.float64)
@@ -130,6 +131,25 @@ class RegionScan:
         self.sum_dist = np.zeros(K, dtype=np.float64)
         self.dist_hist = np.zeros((K, cfg.hist_bins), dtype=np.int64)
         self.n_acts = 0
+
+        # ---------------------------------------------- cell shell / competition
+        # margin = d(runner-up) − d(winner): how far inside its cell a member
+        # sits. Small margin = on a bisector. ``comp[k, j]`` counts members of k
+        # whose runner-up was j — the competition graph, which is *not* the
+        # geometric neighbour table on the card.
+        self.sum_margin = np.zeros(K, dtype=np.float64)
+        self.n_contested = np.zeros(K, dtype=np.int64)
+        self.comp = (np.zeros((K, K), dtype=np.int32)
+                     if K <= cfg.comp_max_k else None)
+
+        # ------------------------------------------------------ unclaimed mass
+        # Activations whose nearest exemplar is further than θ belong to no
+        # cell. Their rate is EP's coverage/OOD signal; ``near_miss`` is the
+        # per-region shadow just outside the boundary.
+        self.n_unclaimed = 0
+        self.sum_unclaimed_dist = 0.0
+        self.unclaimed_hist = np.zeros(cfg.hist_bins, dtype=np.int64)
+        self.near_miss = np.zeros(K, dtype=np.int64)
 
         # Shared uniform token subsample: its projections onto *every* region
         # direction become the grey full-corpus background of the projection
@@ -145,20 +165,30 @@ class RegionScan:
         sims = dirs @ d.E.T                    # (n, K) cosine similarity
         best = np.argmax(sims, axis=1)
         rows = np.arange(len(X))
-        dist = np.maximum(1.0 - sims[rows, best], 0.0)
+        best_sim = sims[rows, best].copy()
+        # Runner-up: mask the winner, argmax again, restore. Cheaper than a
+        # partition and it reuses the matmul we already paid for.
+        sims[rows, best] = -np.inf
+        second = np.argmax(sims, axis=1)
+        margin = best_sim - sims[rows, second]  # = d(runner-up) − d(winner)
+        sims[rows, best] = best_sim
+
+        dist = np.maximum(1.0 - best_sim, 0.0)
         member = dist <= d.threshold
         meta = _pack(gid, pos)
 
         mreg = best[member]
         mmeta = meta[member]
         mdist = dist[member].astype(np.float32)
+        mmargin = margin[member].astype(np.float32)
         # proj = <h - c, e_k> — the magnitude EP's unit-direction geometry
         # discards, recovered here for free from the same matmul.
-        mproj = (sims[rows[member], mreg] * norms[member]).astype(np.float32)
+        mproj = (best_sim[member] * norms[member]).astype(np.float32)
 
         self.closest.update(mreg, -mdist, mmeta, proj=mproj)
         key = -self.rng.random(mreg.size).astype(np.float32)
-        self.random.update(mreg, key, mmeta, dist=mdist, proj=mproj)
+        self.random.update(mreg, key, mmeta, dist=mdist, proj=mproj,
+                           margin=mmargin)
         band = np.minimum((mdist / d.threshold * cfg.n_bands).astype(int),
                           cfg.n_bands - 1)
         # Independent key so band samples don't just replicate the random draw.
@@ -177,10 +207,25 @@ class RegionScan:
                           cfg.hist_bins - 1)
         np.add.at(self.dist_hist, (mreg, bins), 1)
 
+        np.add.at(self.sum_margin, mreg, mmargin.astype(np.float64))
+        np.add.at(self.n_contested, mreg[mmargin < cfg.contested_eps * d.threshold], 1)
+        if self.comp is not None:
+            np.add.at(self.comp, (mreg, second[member]), 1)
+
+        un = ~member
+        if un.any():
+            udist = dist[un]
+            self.n_unclaimed += int(udist.size)
+            self.sum_unclaimed_dist += float(udist.sum())
+            span = max(2.0 - d.threshold, 1e-6)
+            ub = np.minimum(((udist - d.threshold) / span
+                             * cfg.hist_bins).astype(int), cfg.hist_bins - 1)
+            np.add.at(self.unclaimed_hist, np.maximum(ub, 0), 1)
+            np.add.at(self.near_miss, best[un], 1)
+
         take = self.rng.random(len(X)) < self.bg_rate
         if take.any():
-            self._bg.append(((dirs[take] @ d.E.T) * norms[take, None])
-                            .astype(np.float16))
+            self._bg.append((sims[take] * norms[take, None]).astype(np.float16))
         self.n_acts += len(X)
 
     # ------------------------------------------------------------- results
@@ -196,6 +241,31 @@ class RegionScan:
             out[f"band{b}"] = self.bands[b].rows(i, limit=cfg.n_per_band)
         out["random"] = self.random.rows(i, limit=cfg.n_random)
         return out
+
+    def competitors(self, i: int, k: int) -> list[list]:
+        """Top-k runner-up regions for region ``i`` as ``[j, count, share]``."""
+        if self.comp is None:
+            return []
+        row = self.comp[i]
+        tot = int(row.sum())
+        if not tot:
+            return []
+        idx = np.argpartition(-row, min(k, len(row) - 1))[:k]
+        idx = idx[np.argsort(-row[idx])]
+        return [[int(j), int(row[j]), round(float(row[j] / tot), 4)]
+                for j in idx if row[j] > 0]
+
+    def unclaimed(self) -> dict:
+        """Corpus-level coverage: how much of the stream fell outside every cell."""
+        n = max(self.n_acts, 1)
+        return {
+            "nUnclaimed": int(self.n_unclaimed),
+            "rate": round(self.n_unclaimed / n, 5),
+            "meanDist": (round(self.sum_unclaimed_dist / self.n_unclaimed, 4)
+                         if self.n_unclaimed else None),
+            "hist": self.unclaimed_hist.tolist(),
+            "range": [round(self.d.threshold, 4), 2.0],
+        }
 
     def winner_gids(self, region_ids: list[int]) -> set[int]:
         gids: set[int] = set()

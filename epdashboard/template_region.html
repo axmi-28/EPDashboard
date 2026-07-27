@@ -5,154 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <style>
-:root {
-  color-scheme: light;
-  --surface-1: #fcfcfb; --page: #f9f9f7;
-  --ink-1: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --series-1: #2a78d6;         /* member / positive projection */
-  --neg: #e34948;              /* negative projection (diverging red pole) */
-  --pos-rgb: 42,120,214; --neg-rgb: 227,73,72;
-  --bg-hist: #898781;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --surface-1: #1a1a19; --page: #0d0d0d;
-    --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-3: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --series-1: #3987e5; --neg: #e66767;
-    --pos-rgb: 57,135,229; --neg-rgb: 230,103,103;
-  }
-}
+/* SAEDashboard-style: one white sheet, bold uppercase section heads, no boxes. */
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink-1);
+body { margin: 0; background: #fff; color: #111;
   font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-a { color: var(--series-1); text-decoration: none; }
+a { color: #1a56b0; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
-  padding: 10px 16px; border-bottom: 1px solid var(--grid); background: var(--surface-1); }
-header h1 { font-size: 15px; margin: 0; font-weight: 650; }
-.chip { color: var(--ink-2); font-size: 12px; }
-.chip b { color: var(--ink-1); font-weight: 600; }
+#toolbar { padding: 10px 14px; display: flex; gap: 6px; align-items: center; }
+#toolbar select { font: 12px system-ui; padding: 2px 4px; max-width: 480px;
+  background: #eee; border: 1px solid #bbb; border-radius: 3px; }
+#toolbar button { font: 12px system-ui; padding: 2px 8px; cursor: pointer;
+  background: #eee; border: 1px solid #bbb; border-radius: 3px; }
+#toolbar button:disabled { opacity: .4; cursor: default; }
+#toolbar .pos { color: #888; font-size: 12px; }
 
-nav.regionnav { display: flex; gap: 8px; align-items: center; padding: 10px 16px; }
-nav.regionnav select { max-width: 560px; font: inherit; padding: 3px 6px;
-  background: var(--surface-1); color: var(--ink-1);
-  border: 1px solid var(--axis); border-radius: 6px; }
-nav.regionnav button { font: inherit; padding: 3px 10px; cursor: pointer;
-  background: var(--surface-1); color: var(--ink-1);
-  border: 1px solid var(--axis); border-radius: 6px; }
-nav.regionnav button:disabled { opacity: .4; cursor: default; }
+#sheet { margin: 0 14px 8px; border: 1px solid #ccc; background: #fff;
+  overflow-x: auto; }
+#cols { display: flex; flex-wrap: nowrap; gap: 44px; padding: 28px 34px;
+  width: max-content; min-width: 100%; }
+.col { flex: 0 0 auto; }
+.col.stats { width: 250px; }
+.col.plots { width: 340px; }
+.col.seqcol { width: 560px; }
 
-main { display: grid; grid-template-columns: 250px 340px minmax(360px, 1fr);
-  gap: 12px; padding: 0 16px 40px; align-items: start; }
-@media (max-width: 1100px) { main { grid-template-columns: 250px 1fr; }
-  #col3 { grid-column: 1 / -1; } }
-.panel { background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
-.panel h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650;
-  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
-.panel .note { color: var(--ink-3); font-size: 11px; margin: 2px 0 6px; }
+h2 { font-size: 15px; font-weight: 800; letter-spacing: .02em; margin: 0 0 2px;
+  text-transform: uppercase; }
+h2 .sub { display: block; font-size: 13px; font-weight: 800;
+  text-transform: none; }
+.sect { margin-bottom: 26px; }
+.small { color: #888; font-size: 11px; margin: 1px 0 6px; }
 
-table.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
-table.kv td { padding: 2px 0; }
-table.kv td:first-child { color: var(--ink-2); }
+table.kv { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.kv td { padding: 1.5px 0; }
+table.kv td:first-child { color: #555; padding-right: 12px; }
 table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 
-table.nbrs { width: 100%; border-collapse: collapse; font-size: 12px; }
-table.nbrs td { padding: 2px 4px 2px 0; vertical-align: top; }
-table.nbrs td.cos { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
-table.nbrs td.toks { color: var(--ink-3); overflow: hidden; white-space: nowrap;
-  text-overflow: ellipsis; max-width: 130px; }
+table.nbrs { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.nbrs th { text-align: left; color: #888; font-weight: 400;
+  font-size: 12px; padding: 0 8px 3px 0; }
+table.nbrs th:nth-child(2) { text-align: right; }
+table.nbrs td { padding: 1.5px 8px 1.5px 0; vertical-align: top; }
+table.nbrs td.cos { text-align: right; font-variant-numeric: tabular-nums; }
+table.nbrs td.toks { color: #999; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; max-width: 120px; font-size: 12px; }
 
-.lensgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.lenscol h4 { margin: 0 0 3px; font-size: 11px; font-weight: 600; color: var(--ink-2); }
-.tokline { display: flex; flex-wrap: wrap; gap: 3px; }
-.tk { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
-  white-space: pre; font-size: 12px; background: rgba(var(--pos-rgb), .07); }
-.tk.neg { background: rgba(var(--neg-rgb), .07); }
-.meter { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 11px; color: var(--ink-2); }
-.meter .bar { flex: 1; height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
-.meter .bar i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
-.meter b { font-variant-numeric: tabular-nums; color: var(--ink-1); }
+.lenscols { display: flex; gap: 26px; }
+.lenscols > div { flex: 1; min-width: 0; }
+h3.lensh { font-size: 13px; font-weight: 800; text-transform: uppercase;
+  margin: 0 0 6px; }
+.lrow { display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px; gap: 8px; }
+.tk { padding: 0 5px; border-radius: 3px; white-space: pre;
+  font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+.tk.neg { background: #fbc5c5; }
+.tk.pos { background: #b9bdf3; }
+.lrow .v { color: #333; font-variant-numeric: tabular-nums; font-size: 12px; }
 
-svg.hist { display: block; width: 100%; height: 96px; }
-.axislab { font-size: 10px; fill: var(--ink-3); font-family: inherit; }
-.legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
-.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
-  margin-right: 4px; vertical-align: -1px; }
+svg.hist { display: block; width: 100%; height: 110px; }
+.axislab { font-size: 10px; fill: #888; font-family: inherit; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: #777; margin-top: 2px; }
+.legend i { display: inline-block; width: 9px; height: 9px; margin-right: 4px;
+  vertical-align: -1px; }
 
-.grp { margin-bottom: 14px; }
-.grp h4 { margin: 0 0 2px; font-size: 12px; font-weight: 650; }
-.grp .sub { color: var(--ink-3); font-size: 11px; margin-bottom: 5px; }
-.seq { padding: 3px 4px; border-radius: 4px; margin-bottom: 3px; display: flex; gap: 8px; }
-.seq:nth-child(odd) { background: rgba(137,135,129,.06); }
-.seq .m { flex: 0 0 58px; text-align: right; color: var(--ink-3); font-size: 11px;
-  font-variant-numeric: tabular-nums; padding-top: 1px; }
-.seq .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.t { white-space: pre-wrap; border-radius: 2px; padding: 0 0.5px; }
-.t.fire { font-weight: 650; box-shadow: inset 0 -2px 0 0 var(--ink-1); }
-.t.mem { box-shadow: inset 0 -1px 0 0 var(--ink-3); }
-.t.fire.mem { box-shadow: inset 0 -2px 0 0 var(--ink-1); }
+.seq { font: 12px/1.75 ui-monospace, "SF Mono", Menlo, monospace;
+  margin-bottom: 2px; overflow-wrap: anywhere; }
+.t { white-space: pre-wrap; border-radius: 2px; padding: 0.5px 0; }
+.t.fire { font-weight: 700; }
+.t.mem { box-shadow: inset 0 -1px 0 0 #bbb; }
+
+#footer { color: #999; font-size: 11px; padding: 6px 16px 26px; }
+#footer b { color: #666; font-weight: 600; }
 
 #tip { position: fixed; pointer-events: none; z-index: 10; display: none;
-  background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--axis);
-  border-radius: 6px; padding: 5px 8px; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
-  max-width: 320px; }
-#tip .k { color: var(--ink-2); }
+  background: #fff; color: #111; border: 1px solid #bbb; padding: 5px 8px;
+  font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,.15); max-width: 320px; }
+#tip .k { color: #888; }
 </style>
 </head>
 <body>
-<header>
-  <h1><a href="index.html">EPDashboard</a> · <span id="dictname"></span></h1>
-  <span class="chip" id="dictchips"></span>
-</header>
-<nav class="regionnav">
-  <button id="prev">‹ prev</button>
+<div id="toolbar">
   <select id="regsel"></select>
-  <button id="next">next ›</button>
-  <span class="chip" id="regpos"></span>
-</nav>
-<main>
-  <div id="col1"></div>
-  <div id="col2"></div>
-  <div id="col3"></div>
-</main>
+  <button id="prev">‹</button>
+  <button id="next">›</button>
+  <span class="pos" id="regpos"></span>
+</div>
+<div id="sheet"><div id="cols"></div></div>
+<div id="footer"></div>
 <div id="tip"></div>
 <script id="payload" type="application/json">__DATA__</script>
 <script>
 "use strict";
 const P = JSON.parse(document.getElementById("payload").textContent);
-const H = P.header, B = P.batch, FILE_OF = P.fileOf; // region id -> batch file
+const H = P.header, B = P.batch, FILE_OF = P.fileOf;
 const IDS = H.regionTable.map(r => r.i);
 const byId = {}; B.regions.forEach(r => { byId[r.i] = r; });
 
-const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-const showTok = s => s.replace(/\n/g, "⏎").replace(/\t/g, "⇥");
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const showTok = s => s.replace(/\n/g, "\\n").replace(/\t/g, "\\t");
 const fmt = (v, d=3) => v == null ? "–" : Number(v).toFixed(d);
-
-// ---------------------------------------------------------------- header
-{
-  const d = H.dict;
-  document.getElementById("dictname").textContent =
-    `${d.model_id} · L${d.layer}` + (d.p != null ? ` · p=${d.p}` : "");
-  document.title = `EPDashboard · ${d.run}`;
-  document.getElementById("dictchips").innerHTML =
-    `K <b>${d.K}</b> &nbsp; θ <b>${d.threshold}</b> &nbsp; scanned ` +
-    `<b>${H.scan.nActs.toLocaleString()}</b> acts &nbsp; member-share corr ` +
-    `<b>${H.scan.member_share_corr}</b> &nbsp; source <b>${esc(H.source.mode)}:` +
-    `${esc(H.source.dataset || H.source.cache_dir || "")}</b>`;
-}
 
 // ------------------------------------------------------------------ nav
 const sel = document.getElementById("regsel");
 for (const r of H.regionTable) {
   const o = document.createElement("option");
   o.value = r.i;
-  const lab = r.label ? ` · ${r.label}` : "";
-  o.textContent = `#${r.i}${lab} · n=${r.n} · ${(r.lensTop || []).map(showTok).join(" ")}`;
+  o.textContent = `${r.i}${r.label ? " · " + r.label : ""} · ` +
+    (r.lensTop || []).map(showTok).join(" ");
   sel.appendChild(o);
 }
 function currentId() {
@@ -186,9 +145,10 @@ function tipShow(html, ev) {
 function tipHide() { tip.style.display = "none"; }
 
 // ------------------------------------------------------------ histograms
-function histSVG(series, lo, hi, xlabel, hover) {
-  // series: [{counts, rgb, alpha}] drawn back-to-front, each peak-normalised.
-  const W = 316, Hh = 96, top = 4, bot = 16, n = series[0].counts.length;
+function histSVG(series, lo, hi, hover) {
+  // series drawn back-to-front, each peak-normalised. SAEDashboard-style
+  // ticks: 5 x-labels along the baseline.
+  const W = 320, Hh = 110, top = 4, bot = 16, n = series[0].counts.length;
   const bw = W / n;
   const ns = document.createElementNS.bind(document, "http://www.w3.org/2000/svg");
   const svg = ns("svg");
@@ -197,7 +157,7 @@ function histSVG(series, lo, hi, xlabel, hover) {
   const base = ns("line");
   base.setAttribute("x1", 0); base.setAttribute("x2", W);
   base.setAttribute("y1", Hh - bot); base.setAttribute("y2", Hh - bot);
-  base.setAttribute("stroke", "var(--axis)");
+  base.setAttribute("stroke", "#ccc");
   svg.appendChild(base);
   for (const s of series) {
     const peak = Math.max(1, ...s.counts);
@@ -209,12 +169,10 @@ function histSVG(series, lo, hi, xlabel, hover) {
       r.setAttribute("width", Math.max(0.8, bw - 1).toFixed(1));
       r.setAttribute("y", (Hh - bot - hgt).toFixed(1));
       r.setAttribute("height", hgt.toFixed(1));
-      r.setAttribute("rx", Math.min(2, bw / 3));
-      r.setAttribute("fill", `rgba(${s.rgb},${s.alpha})`);
+      r.setAttribute("fill", s.fill);
       svg.appendChild(r);
     }
   }
-  // invisible hover strips on top
   for (let b = 0; b < n; b++) {
     const r = ns("rect");
     r.setAttribute("x", b * bw); r.setAttribute("width", bw);
@@ -225,31 +183,42 @@ function histSVG(series, lo, hi, xlabel, hover) {
     r.addEventListener("mouseleave", tipHide);
     svg.appendChild(r);
   }
-  const t0 = ns("text"), t1 = ns("text"), tl = ns("text");
-  t0.setAttribute("x", 0); t0.setAttribute("y", Hh - 3);
-  t0.setAttribute("class", "axislab"); t0.textContent = fmt(lo, 2);
-  t1.setAttribute("x", W); t1.setAttribute("y", Hh - 3);
-  t1.setAttribute("text-anchor", "end"); t1.setAttribute("class", "axislab");
-  t1.textContent = fmt(hi, 2);
-  tl.setAttribute("x", W / 2); tl.setAttribute("y", Hh - 3);
-  tl.setAttribute("text-anchor", "middle"); tl.setAttribute("class", "axislab");
-  tl.textContent = xlabel;
-  svg.append(t0, t1, tl);
+  for (let t = 0; t <= 4; t++) {
+    const x = W * t / 4;
+    const lab = ns("text");
+    lab.setAttribute("x", x);
+    lab.setAttribute("y", Hh - 3);
+    lab.setAttribute("class", "axislab");
+    lab.setAttribute("text-anchor", t === 0 ? "start" : t === 4 ? "end" : "middle");
+    lab.textContent = fmt(lo + (hi - lo) * t / 4, 2);
+    svg.appendChild(lab);
+    if (t > 0 && t < 4) {
+      const tick = ns("line");
+      tick.setAttribute("x1", x); tick.setAttribute("x2", x);
+      tick.setAttribute("y1", Hh - bot); tick.setAttribute("y2", Hh - bot + 3);
+      tick.setAttribute("stroke", "#ccc");
+      svg.appendChild(tick);
+    }
+  }
   return svg;
 }
 
 // --------------------------------------------------------------- tokens
+// SAEDashboard idiom: orange highlight ∝ activation; the firing token gets
+// the saturated orange. Negative projections (no SAE analogue) go light blue.
 function tokenSpan(tokens, acts, mb, fi, scale, dist) {
   const wrap = document.createElement("span");
   const mem = new Set(mb || []);
   tokens.forEach((tk, j) => {
     const s = document.createElement("span");
     s.className = "t" + (j === fi ? " fire" : "") + (mem.has(j) ? " mem" : "");
-    s.textContent = showTok(tk);
+    s.textContent = tk.replace(/\n/g, "\\n");
     const v = acts[j];
     if (v != null && scale > 0) {
-      const a = Math.min(0.55, Math.abs(v) / scale * 0.55);
-      s.style.background = `rgba(var(${v >= 0 ? "--pos-rgb" : "--neg-rgb"}),${a.toFixed(3)})`;
+      const a = Math.min(1, Math.abs(v) / scale);
+      s.style.background = v >= 0
+        ? `rgba(255,140,0,${(a * 0.85).toFixed(3)})`
+        : `rgba(90,110,235,${(a * 0.5).toFixed(3)})`;
     }
     s.addEventListener("mousemove", ev => tipShow(
       `<b>${esc(showTok(tk))}</b><br><span class="k">proj</span> ${v == null ? "– (pos 0)" : fmt(v)}` +
@@ -262,42 +231,37 @@ function tokenSpan(tokens, acts, mb, fi, scale, dist) {
 }
 
 // --------------------------------------------------------------- render
-function panel(title, note) {
+function sect(parent, titleHTML, note) {
   const d = document.createElement("div");
-  d.className = "panel";
-  d.innerHTML = `<h3>${esc(title)}</h3>` + (note ? `<p class="note">${esc(note)}</p>` : "");
+  d.className = "sect";
+  d.innerHTML = `<h2>${titleHTML}</h2>` +
+    (note ? `<p class="small">${esc(note)}</p>` : "");
+  parent.appendChild(d);
   return d;
 }
 
-function lensBlock(parent, title, tab, verbLabel) {
-  const p = panel(title);
-  if (tab.verb != null) {
-    const m = document.createElement("div");
-    m.className = "meter";
-    m.innerHTML = `<span>${verbLabel}</span><span class="bar"><i style="width:${(tab.verb*100).toFixed(1)}%"></i></span><b>${fmt(tab.verb)}</b>`;
-    p.appendChild(m);
-  }
-  const g = document.createElement("div");
-  g.className = "lensgrid";
-  const mk = (name, toks, neg) => {
+function lensSect(parent, title, tab) {
+  const d = sect(parent, title +
+    (tab.verb != null ? `<span class="sub">verbalizability = ${fmt(tab.verb)}</span>` : ""));
+  const cols = document.createElement("div");
+  cols.className = "lenscols";
+  const mk = (name, toks, cls) => {
     const c = document.createElement("div");
-    c.className = "lenscol";
-    c.innerHTML = `<h4>${name}</h4>`;
-    const line = document.createElement("div");
-    line.className = "tokline";
+    c.innerHTML = `<h3 class="lensh">${name}</h3>`;
     for (const t of toks) {
-      const s = document.createElement("span");
-      s.className = "tk" + (neg ? " neg" : "");
-      s.textContent = showTok(t);
-      line.appendChild(s);
+      const row = document.createElement("div");
+      row.className = "lrow";
+      const chip = document.createElement("span");
+      chip.className = "tk " + cls;
+      chip.textContent = showTok(t);
+      row.appendChild(chip);
+      c.appendChild(row);
     }
-    c.appendChild(line);
-    g.appendChild(c);
+    cols.appendChild(c);
   };
-  mk("promoted", tab.pos, false);
-  mk("suppressed", tab.neg, true);
-  p.appendChild(g);
-  parent.appendChild(p);
+  mk("negative", tab.neg, "neg");
+  mk("positive", tab.pos, "pos");
+  d.appendChild(cols);
 }
 
 function render() {
@@ -308,103 +272,155 @@ function render() {
   document.getElementById("prev").disabled = k <= 0;
   document.getElementById("next").disabled = k >= IDS.length - 1;
   document.getElementById("regpos").textContent = `${k + 1} / ${IDS.length}`;
-  const c1 = document.getElementById("col1"),
-        c2 = document.getElementById("col2"),
-        c3 = document.getElementById("col3");
-  c1.innerHTML = c2.innerHTML = c3.innerHTML = "";
+  const cols = document.getElementById("cols");
+  cols.innerHTML = "";
+  const col = cls => {
+    const c = document.createElement("div");
+    c.className = "col " + cls;
+    cols.appendChild(c);
+    return c;
+  };
 
-  // ---- col1: stats + neighbors
+  // ---- stats column
+  const c1 = col("stats");
   const st = r.stats;
-  const ps = panel("region " + r.i + (r.label ? " · " + r.label : ""));
-  ps.insertAdjacentHTML("beforeend", `<table class="kv">
+  const s1 = sect(c1, `region ${r.i}` +
+    (r.label ? `<span class="sub">${esc(r.label)}</span>` : ""));
+  s1.insertAdjacentHTML("beforeend", `<table class="kv">
     <tr><td>members (build)</td><td>${st.n.toLocaleString()}</td></tr>
     <tr><td>members (scan)</td><td>${st.nScan.toLocaleString()}</td></tr>
     <tr><td>density</td><td>${(st.density * 100).toFixed(3)}%</td></tr>
     <tr><td>coherence</td><td>${fmt(st.coherence)}</td></tr>
     <tr><td>mean dist / θ</td><td>${fmt(st.meanDist, 3)} / ${fmt(H.dict.threshold, 3)}</td></tr>
     <tr><td>proj mean ± sd</td><td>${fmt(st.projMean)} ± ${fmt(st.projSd)}</td></tr>
-    <tr><td>proj max</td><td>${fmt(st.projMax)}</td></tr>
+    <tr><td>proj max</td><td>${fmt(st.projMax)}</td></tr>` +
+    // Cell shell — absent from records built before these accumulators existed.
+    (st.margin == null ? "" : `
+    <tr><td>mean margin</td><td>${fmt(st.margin, 3)}</td></tr>
+    <tr><td>contested</td><td>${(st.contested * 100).toFixed(1)}%</td></tr>`) + `
   </table>`);
-  c1.appendChild(ps);
+  // Exemplar context: the first-arrival activation that seeded the region.
+  if (r.ex) {
+    const sx = sect(c1, "exemplar",
+      (r.ex.d > 0.001 ? ` (closest stored member, d=${fmt(r.ex.d, 3)})` : ""));
+    const seq = document.createElement("div");
+    seq.className = "seq";
+    const t = r.ex.t;
+    if (r.ex.a >= 0) {
+      seq.append(t.slice(0, r.ex.a).replace(/\n/g, "\\n"));
+      const hi = document.createElement("span");
+      hi.className = "t fire";
+      hi.style.background = "rgba(255,140,0,0.85)";
+      hi.textContent = t.slice(r.ex.a, r.ex.b).replace(/\n/g, "\\n");
+      hi.title = `exemplar token · pos ${r.ex.pos}`;
+      seq.appendChild(hi);
+      seq.append(t.slice(r.ex.b).replace(/\n/g, "\\n"));
+    } else {
+      seq.append(t.replace(/\n/g, "\\n"));
+    }
+    sx.appendChild(seq);
+  }
 
-  const pn = panel("nearest regions", "full-space cosine between exemplars");
+  const s2 = sect(c1, "nearest regions", "full-space cosine between exemplars");
   const tb = document.createElement("table");
   tb.className = "nbrs";
+  tb.innerHTML = `<tr><th>region</th><th>cos</th><th></th></tr>`;
   for (const [j, cs] of r.neighbors) {
     const row = H.regionTable.find(x => x.i === j) || {};
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td><a href="#" data-j="${j}">#${j}</a></td>` +
+    tr.innerHTML = `<td><a href="#" data-j="${j}">${j}</a></td>` +
       `<td class="cos">${fmt(cs)}</td>` +
       `<td class="toks">${esc((row.lensTop || []).map(showTok).join(" "))}</td>`;
     tr.querySelector("a").addEventListener("click", ev => { ev.preventDefault(); go(j); });
     tb.appendChild(tr);
   }
-  pn.appendChild(tb);
-  c1.appendChild(pn);
+  s2.appendChild(tb);
 
-  // ---- col2: histograms + lenses
+  // Competition graph: who actually comes second for this region's members.
+  // Distinct from the cosine table above — a region's rival for tokens need
+  // not be its nearest exemplar.
+  if (r.competitors && r.competitors.length) {
+    const s2b = sect(c1, "competitors", "runner-up cell for this region's members");
+    const tc = document.createElement("table");
+    tc.className = "nbrs";
+    tc.innerHTML = `<tr><th>region</th><th>share</th><th></th></tr>`;
+    for (const [j, , share] of r.competitors) {
+      const row = H.regionTable.find(x => x.i === j) || {};
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><a href="#" data-j="${j}">${j}</a></td>` +
+        `<td class="cos">${(share * 100).toFixed(1)}%</td>` +
+        `<td class="toks">${esc((row.lensTop || []).map(showTok).join(" "))}</td>`;
+      tr.querySelector("a").addEventListener("click", ev => { ev.preventDefault(); go(j); });
+      tc.appendChild(tr);
+    }
+    s2b.appendChild(tc);
+  }
+
+  // ---- plots column
+  const c2 = col("plots");
   const ph = r.projHist;
-  const p1 = panel("projection histogram",
-    `member tokens (n=${ph.nMember}, reservoir) vs corpus sample (n=${ph.nBg}); peak-normalised`);
-  p1.appendChild(histSVG(
-    [{counts: ph.bg, rgb: "137,135,129", alpha: 0.45},
-     {counts: ph.member, rgb: getComputedStyle(document.documentElement).getPropertyValue("--pos-rgb"), alpha: 0.9}],
-    ph.range[0], ph.range[1], "projection ⟨h−c, e⟩",
+  const s3 = sect(c2, `projections<span class="sub">density = ${(st.density * 100).toFixed(3)}%</span>`);
+  s3.appendChild(histSVG(
+    [{counts: ph.bg, fill: "rgba(150,150,150,0.45)"},
+     {counts: ph.member, fill: "rgba(253,166,65,0.95)"}],
+    ph.range[0], ph.range[1],
     (b, a, z) => `<span class="k">proj ∈</span> [${fmt(a,2)}, ${fmt(z,2)})<br>` +
       `<span class="k">members:</span> ${ph.member[b]} &nbsp; <span class="k">corpus:</span> ${ph.bg[b]}`));
   const lg = document.createElement("div");
   lg.className = "legend";
-  lg.innerHTML = `<span><i style="background:var(--series-1)"></i>members</span>` +
-    `<span><i style="background:rgba(137,135,129,.55)"></i>corpus sample</span>`;
-  p1.appendChild(lg);
-  c2.appendChild(p1);
+  lg.innerHTML = `<span><i style="background:rgba(253,166,65,.95)"></i>members (n=${ph.nMember})</span>` +
+    `<span><i style="background:rgba(150,150,150,.45)"></i>corpus sample</span>`;
+  s3.appendChild(lg);
 
   const dh = r.distHist;
-  const p2 = panel("distance to exemplar",
-    "all scanned members, bins over [0, θ] — region tightness");
-  p2.appendChild(histSVG(
-    [{counts: dh.counts, rgb: getComputedStyle(document.documentElement).getPropertyValue("--pos-rgb"), alpha: 0.9}],
-    0, dh.max, "cosine distance to exemplar",
+  const s4 = sect(c2, "distance to exemplar",
+    "all scanned members, bins over [0, θ]");
+  s4.appendChild(histSVG(
+    [{counts: dh.counts, fill: "rgba(253,166,65,0.95)"}], 0, dh.max,
     (b, a, z) => `<span class="k">d ∈</span> [${fmt(a,3)}, ${fmt(z,3)})<br>` +
       `<span class="k">members:</span> ${dh.counts[b]}`));
-  c2.appendChild(p2);
 
   const L = r.lens;
-  lensBlock(c2, "logit lens · exemplar", L.exemplar, "verbalizability");
-  lensBlock(c2, "logit lens · mean member direction", L.mean, "verbalizability");
+  lensSect(c2, "logit lens · exemplar", L.exemplar);
+  lensSect(c2, "logit lens · mean dir", L.mean);
   if (L.jlens) {
-    lensBlock(c2, `j-lens · exemplar (n=${H.lens.jNPrompts} fit prompts)`, L.jlens, "verbalizability");
-    lensBlock(c2, "j-lens · mean member direction", L.jlensMean, "verbalizability");
+    lensSect(c2, `j-lens · exemplar`, L.jlens);
+    lensSect(c2, "j-lens · mean dir", L.jlensMean);
   }
 
-  // ---- col3: sequence groups
+  // ---- sequence columns (one per group, SAEDashboard quantile-style)
   let scale = st.projMax || 0;
   for (const g of r.groups)
     for (const s of g.seqs)
       for (const v of s.act) if (v != null) scale = Math.max(scale, Math.abs(v));
   for (const g of r.groups) {
-    const div = document.createElement("div");
-    div.className = "grp";
-    div.innerHTML = `<h4>${esc(g.title)}</h4>` +
-      (g.subtitle ? `<div class="sub">${esc(g.subtitle)}</div>` : "");
+    const c = col("seqcol");
+    const head = g.key === "closest"
+      ? `closest members<span class="sub">max proj = ${fmt(st.projMax)}</span>`
+      : esc(g.title) + (g.subtitle ? `<span class="sub">${esc(g.subtitle)}</span>` : "");
+    const s = sect(c, head);
     if (!g.seqs.length)
-      div.insertAdjacentHTML("beforeend", `<div class="sub">no examples</div>`);
-    for (const s of g.seqs) {
+      s.insertAdjacentHTML("beforeend", `<p class="small">no examples</p>`);
+    for (const q of g.seqs) {
       const row = document.createElement("div");
       row.className = "seq";
-      const m = document.createElement("span");
-      m.className = "m";
-      m.textContent = "d " + fmt(s.d, 3);
-      m.title = "cosine distance to exemplar; proj " + fmt(s.v);
-      row.appendChild(m);
-      const txt = document.createElement("span");
-      txt.className = "txt";
-      txt.appendChild(tokenSpan(s.tok, s.act, s.mb, s.fi, scale, s.d));
-      row.appendChild(txt);
-      div.appendChild(row);
+      row.appendChild(tokenSpan(q.tok, q.act, q.mb, q.fi, scale, q.d));
+      s.appendChild(row);
     }
-    c3.appendChild(div);
   }
+
+  // ---- footer provenance (replaces the old top bar)
+  const d = H.dict;
+  document.getElementById("footer").innerHTML =
+    `<b>${esc(d.model_id)}</b> · layer ${d.layer}` +
+    (d.p != null ? ` · p=${d.p}` : "") +
+    ` · K=${d.K} · θ=${d.threshold} · d_model=${d.dModel}` +
+    ` &nbsp;|&nbsp; scanned ${H.scan.nActs.toLocaleString()} activations` +
+    ` (${esc(H.source.dataset || H.source.cache_dir || "?")}, ${esc(H.source.mode)})` +
+    ` · member-share corr ${H.scan.member_share_corr}` +
+    (H.lens.jlens ? ` · j-lens n=${H.lens.jNPrompts}` : "") +
+    ` &nbsp;|&nbsp; <a href="index.html">dictionary view</a>` +
+    ` · EPDashboard · ${esc(d.run)}`;
 }
 render();
 </script>

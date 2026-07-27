@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from epdashboard import __version__
+from epdashboard.geometry import nn_cosine, sphere_payload
 from epdashboard.scan import EPDict, RegionScan
 from epdashboard.sequences import PromptCache, build_groups
 
@@ -42,6 +43,42 @@ def dict_p(d: EPDict) -> float | None:
     return float(f"{m.group(1)}.{m.group(2)}") if m else None
 
 
+EX_WINDOW = (90, 150)   # chars kept before/after the exemplar token
+
+
+def exemplar_entry(part, tok, bos_offset: int) -> dict | None:
+    """The exemplar's own context, from the pickle's stored closest prompts.
+
+    The build records each region's closest members; entry 0 at d≈0 is the
+    activation that *seeded* the region. Shipped with its distance so the UI
+    can say honestly when the stored closest prompt is not exactly the seed
+    (d > 0 can happen when merges moved the exemplar).
+    """
+    if not getattr(part, "closest_prompts", None):
+        return None
+    d0, text, pos = part.closest_prompts[0]
+    i = pos - bos_offset
+    enc = tok(text, add_special_tokens=False, return_offsets_mapping=True)
+    offs = enc["offset_mapping"]
+    span = offs[i] if 0 <= i < len(offs) and offs[i][1] > offs[i][0] else None
+    if span is None:
+        t = text[:EX_WINDOW[0] + EX_WINDOW[1]]
+        return {"d": round(float(d0), 4), "pos": int(pos),
+                "t": t + ("…" if len(text) > len(t) else ""), "a": -1, "b": -1}
+    a, b = span
+    s = max(0, a - EX_WINDOW[0])
+    e = min(len(text), b + EX_WINDOW[1])
+    t = text[s:e]
+    shift = s
+    if s > 0:
+        t = "…" + t
+        shift = s - 1
+    if e < len(text):
+        t += "…"
+    return {"d": round(float(d0), 4), "pos": int(pos),
+            "t": t, "a": a - shift, "b": b - shift}
+
+
 def _hist(values: np.ndarray, lo: float, hi: float, bins: int) -> list[int]:
     if hi <= lo:
         hi = lo + 1e-6
@@ -61,6 +98,7 @@ def region_record(i: int, d: EPDict, scan: RegionScan, pc: PromptCache,
     # background is the shared corpus subsample projected onto this region's
     # direction. A common bin range makes the two overlayable.
     member_proj = scan.random.payload_col(i, "proj")
+    margins = scan.random.payload_col(i, "margin")
     bg_i = bg[:, i].astype(np.float32) if bg.size else np.zeros(0)
     both = np.concatenate([member_proj, bg_i]) if (member_proj.size or bg_i.size) \
         else np.zeros(1)
@@ -73,6 +111,7 @@ def region_record(i: int, d: EPDict, scan: RegionScan, pc: PromptCache,
     return {
         "i": i,
         "label": p.label or None,
+        "ex": exemplar_entry(p, pc.tok, pc.bos_offset),
         "stats": {
             "n": int(p.member_count),
             "nScan": n_scan,
@@ -84,6 +123,16 @@ def region_record(i: int, d: EPDict, scan: RegionScan, pc: PromptCache,
             "projMax": (round(float(scan.max_proj[i]), 3)
                         if np.isfinite(scan.max_proj[i]) else None),
             "projQ": q,
+            # Cell shell: how deep inside its own cell the average member sits,
+            # and what share of members are effectively on a bisector.
+            "margin": round(scan.sum_margin[i] / n_scan, 4) if n_scan else None,
+            "contested": (round(float(scan.n_contested[i] / n_scan), 4)
+                          if n_scan else None),
+            "marginQ": (np.round(np.quantile(margins, [0.05, 0.5, 0.95]), 4)
+                        .tolist() if margins.size >= 5 else []),
+            # Activations just outside θ whose nearest exemplar is still this
+            # one — the region's shadow, not counted as members.
+            "nearMiss": int(scan.near_miss[i]),
         },
         "distHist": {"counts": scan.dist_hist[i].tolist(),
                      "max": round(d.threshold, 4)},
@@ -93,6 +142,7 @@ def region_record(i: int, d: EPDict, scan: RegionScan, pc: PromptCache,
                      "bg": _hist(bg_i, lo, hi, cfg.hist_bins),
                      "nBg": int(bg_i.size)},
         "neighbors": neighbors[i],
+        "competitors": scan.competitors(i, cfg.n_competitors),
         "lens": lens_rows[i],
         "groups": groups,
     }
@@ -104,6 +154,7 @@ def write_dict_output(d: EPDict, scan: RegionScan, pc: PromptCache,
                       out_dir: Path) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     neighbors = nearest_regions(d.E, cfg.n_neighbors)
+    nn = nn_cosine(d.E)
     bg = scan.bg_proj()
 
     batches, summary = [], []
@@ -124,6 +175,9 @@ def write_dict_output(d: EPDict, scan: RegionScan, pc: PromptCache,
                 "coherence": r["stats"]["coherence"],
                 "meanDist": r["stats"]["meanDist"],
                 "verb": r["lens"].get("jlens", r["lens"]["exemplar"])["verb"],
+                "nn": round(float(nn[r["i"]]), 3),
+                "margin": r["stats"]["margin"],
+                "contested": r["stats"]["contested"],
                 "lensTop": r["lens"]["exemplar"]["pos"][:3],
             })
 
@@ -138,13 +192,22 @@ def write_dict_output(d: EPDict, scan: RegionScan, pc: PromptCache,
             "buildActs": d.meta.get("n_activations"),
             "buildCorpus": d.meta.get("corpus"),
             "contextLength": d.meta.get("context_length", cfg.context_length),
+            "largest": int(max(p.member_count for p in d.parts)),
+            "singletons": int(sum(1 for p in d.parts if p.member_count == 1)),
         },
         "source": source_desc,
-        "scan": {"nActs": scan.n_acts, **scan.replay_check()},
+        "scan": {"nActs": scan.n_acts, **scan.replay_check(),
+                 "unclaimed": scan.unclaimed(),
+                 "contested": (round(float(scan.n_contested.sum()
+                                           / max(scan.n_member.sum(), 1)), 4)),
+                 "contestedEps": cfg.contested_eps,
+                 "compGraph": scan.comp is not None},
         "lens": {"k": cfg.lens_k, **jlens_meta},
         "panels": {"nBands": cfg.n_bands, "buffer": list(cfg.buffer),
                    "histBins": cfg.hist_bins, "reservoir": cfg.reservoir,
-                   "bgSample": int(bg.shape[0])},
+                   "bgSample": int(bg.shape[0]), "nClosest": cfg.n_closest,
+                   "nPerBand": cfg.n_per_band, "nRandom": cfg.n_random},
+        "sphere": sphere_payload(d.E),
         "batches": batches,
         "regionTable": summary,
     }

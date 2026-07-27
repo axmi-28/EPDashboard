@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+/* SAEDashboard-style: one white sheet, bold uppercase section heads, no boxes. */
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #111;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: #1a56b0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+#sheet { margin: 14px 14px 8px; border: 1px solid #ccc; background: #fff;
+  padding: 28px 34px; }
+main { display: grid; grid-template-columns: 320px minmax(0, 1fr);
+  gap: 44px; align-items: start; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+h2 { font-size: 15px; font-weight: 800; letter-spacing: .02em; margin: 0 0 2px;
+  text-transform: uppercase; }
+h2 .sub { display: block; font-size: 13px; font-weight: 800;
+  text-transform: none; }
+.sect { margin-bottom: 26px; }
+.small { color: #888; font-size: 11px; margin: 1px 0 6px; }
+
+#sphere { display: block; width: 300px; height: 300px; cursor: grab;
+  touch-action: none; }
+#sphere.drag { cursor: grabbing; }
+
+table.kv { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.kv td { padding: 1.5px 0; }
+table.kv td:first-child { color: #555; padding-right: 12px; }
+table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+.histrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 26px; margin-bottom: 26px; }
+svg.hist { display: block; width: 100%; height: 92px; }
+.axislab { font-size: 10px; fill: #888; font-family: inherit; }
+h3.histh { font-size: 12px; font-weight: 800; text-transform: uppercase;
+  margin: 0 0 3px; }
+
+table.regions { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.regions th, table.regions td { padding: 3px 10px 3px 0; text-align: left; }
+table.regions th { cursor: pointer; user-select: none; font-size: 11.5px;
+  color: #888; font-weight: 400; border-bottom: 1px solid #ccc;
+  position: sticky; top: 0; background: #fff; }
+table.regions td { border-bottom: 1px solid #eee; }
+table.regions th .dir { color: #bbb; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.toks { color: #999; max-width: 360px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+  font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+table.regions tr:hover td { background: #f6f6f6; }
+input#q { font: 12px system-ui; padding: 3px 6px; margin: 0 0 8px; width: 300px;
+  background: #fff; border: 1px solid #bbb; border-radius: 3px; }
+
+#footer { color: #999; font-size: 11px; padding: 6px 16px 26px; }
+#footer b { color: #666; font-weight: 600; }
+
+#tip { position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: #fff; color: #111; border: 1px solid #bbb; padding: 5px 8px;
+  font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,.15); max-width: 300px; }
+#tip .k { color: #888; }
+</style>
+</head>
+<body>
+<div id="sheet">
+<main>
+  <div id="colL">
+    <div class="sect">
+      <h2>voronoi sphere</h2>
+      <p class="small" id="spherenote">PCA-3D layout of exemplar directions;
+        arcs are the spherical Voronoi of the projection, not the true high-d
+        partition. Drag to rotate · hover · click to open a region.</p>
+      <canvas id="sphere" width="600" height="600"></canvas>
+    </div>
+    <div class="sect">
+      <h2>dictionary</h2>
+      <table class="kv" id="dictstats"></table>
+    </div>
+  </div>
+  <div id="colR">
+    <div class="histrow" id="hists"></div>
+    <div class="sect">
+      <h2>regions</h2>
+      <input id="q" type="search" placeholder="filter by label / lens tokens / id…">
+      <div style="overflow-x:auto">
+      <table class="regions" id="tbl"><thead><tr>
+        <th data-k="i">region <span class="dir"></span></th>
+        <th data-k="label">label <span class="dir"></span></th>
+        <th data-k="n" class="num">members <span class="dir"></span></th>
+        <th data-k="density" class="num">density <span class="dir"></span></th>
+        <th data-k="coherence" class="num">coherence <span class="dir"></span></th>
+        <th data-k="meanDist" class="num">mean dist <span class="dir"></span></th>
+        <th data-k="nn" class="num">nn cos <span class="dir"></span></th>
+        <th data-k="verb" class="num">verb. <span class="dir"></span></th>
+        <th>top lens tokens</th>
+      </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<div id="footer"></div>
+<div id="tip"></div>
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const P = JSON.parse(document.getElementById("payload").textContent);
+const H = P.header, FILE_OF = P.fileOf, ROWS = H.regionTable;
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const showTok = s => String(s).replace(/\n/g,"\\n").replace(/\t/g,"\\t");
+const fmt = (v, d=3) => v == null ? "–" : Number(v).toFixed(d);
+const pageOf = i => FILE_OF[i].replace(/\.json$/, ".html") + "#r" + i;
+document.title = `EPDashboard · ${H.dict.run}`;
+
+// ---------------------------------------------------------- dict stats
+{
+  const d = H.dict, tot = ROWS.reduce((a, r) => a + r.n, 0);
+  const byN = [...ROWS].sort((a, b) => b.n - a.n);
+  const top10 = byN.slice(0, 10).reduce((a, r) => a + r.n, 0);
+  const med = (arr) => { const s = arr.filter(v => v != null).sort((a,b)=>a-b);
+    return s.length ? s[s.length >> 1] : null; };
+  document.getElementById("dictstats").innerHTML = [
+    ["regions (K)", d.K.toLocaleString()],
+    ["threshold θ", fmt(d.threshold, 4)],
+    ["d_model", d.dModel],
+    ["build acts", (d.buildActs ?? 0).toLocaleString() + " · " + esc(d.buildCorpus ?? "?")],
+    ["scanned acts", H.scan.nActs.toLocaleString()],
+    ["member-share corr", fmt(H.scan.member_share_corr, 3)],
+    ["largest region", (d.largest ?? byN[0]?.n ?? 0).toLocaleString()],
+    ["top-10 coverage", (100 * top10 / Math.max(tot, 1)).toFixed(1) + "%"],
+    ["singletons", d.singletons ?? ROWS.filter(r => r.n === 1).length],
+    ["median coherence", fmt(med(ROWS.map(r => r.coherence)))],
+    ["median mean-dist / θ", fmt(med(ROWS.map(r => r.meanDist))) + " / " + fmt(d.threshold, 3)],
+    ["median nn cosine", fmt(med(ROWS.map(r => r.nn)))],
+    ["J-lens", H.lens.jlens ? `yes (n=${H.lens.jNPrompts})` : "no"],
+  ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+}
+
+// -------------------------------------------------------------- tooltip
+const tip = document.getElementById("tip");
+function tipShow(html, x, y) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+  let px = x + pad, py = y + pad;
+  if (px + w > innerWidth - 4) px = x - w - pad;
+  if (py + h > innerHeight - 4) py = y - h - pad;
+  tip.style.left = px + "px"; tip.style.top = py + "px";
+}
+function tipHide() { tip.style.display = "none"; }
+
+// ------------------------------------------------------------ histograms
+function histPanel(title, values, opts = {}) {
+  const vals = values.filter(v => v != null && isFinite(v));
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<h3 class="histh">${esc(title)}</h3>`;
+  if (!vals.length) { wrap.insertAdjacentHTML("beforeend",
+    `<p class="small">no data</p>`); return wrap; }
+  const nb = 30, lo = opts.lo ?? Math.min(...vals), hi0 = opts.hi ?? Math.max(...vals);
+  const hi = hi0 > lo ? hi0 : lo + 1e-9;
+  const counts = new Array(nb).fill(0);
+  for (const v of vals)
+    counts[Math.min(nb - 1, Math.floor((v - lo) / (hi - lo) * nb))]++;
+  const W = 300, Hh = 92, bot = 14, top = 3, bw = W / nb, peak = Math.max(...counts);
+  const ns = document.createElementNS.bind(document, "http://www.w3.org/2000/svg");
+  const svg = ns("svg");
+  svg.setAttribute("class", "hist");
+  svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+  const base = ns("line");
+  base.setAttribute("x1", 0); base.setAttribute("x2", W);
+  base.setAttribute("y1", Hh - bot); base.setAttribute("y2", Hh - bot);
+  base.setAttribute("stroke", "#ccc");
+  svg.appendChild(base);
+  counts.forEach((c, b) => {
+    if (!c) return;
+    const h = (Hh - top - bot) * c / peak;
+    const r = ns("rect");
+    r.setAttribute("x", (b * bw + 0.5).toFixed(1));
+    r.setAttribute("width", Math.max(0.8, bw - 1).toFixed(1));
+    r.setAttribute("y", (Hh - bot - h).toFixed(1));
+    r.setAttribute("height", h.toFixed(1));
+    r.setAttribute("fill", "rgba(253,166,65,0.95)");
+    svg.appendChild(r);
+  });
+  counts.forEach((c, b) => {
+    const r = ns("rect");
+    r.setAttribute("x", b * bw); r.setAttribute("width", bw);
+    r.setAttribute("y", 0); r.setAttribute("height", Hh - bot);
+    r.setAttribute("fill", "transparent");
+    const a = lo + (hi - lo) * b / nb, z = lo + (hi - lo) * (b + 1) / nb;
+    const label = opts.fmtBin ? opts.fmtBin(a, z) : `[${fmt(a,2)}, ${fmt(z,2)})`;
+    r.addEventListener("mousemove", ev => tipShow(
+      `<span class="k">${esc(title)} ∈</span> ${label}<br><span class="k">regions:</span> ${c}`,
+      ev.clientX, ev.clientY));
+    r.addEventListener("mouseleave", tipHide);
+    svg.appendChild(r);
+  });
+  const t0 = ns("text"), t1 = ns("text");
+  t0.setAttribute("x", 0); t0.setAttribute("y", Hh - 3);
+  t0.setAttribute("class", "axislab");
+  t0.textContent = opts.fmtTick ? opts.fmtTick(lo) : fmt(lo, 2);
+  t1.setAttribute("x", W); t1.setAttribute("y", Hh - 3);
+  t1.setAttribute("text-anchor", "end"); t1.setAttribute("class", "axislab");
+  t1.textContent = opts.fmtTick ? opts.fmtTick(hi) : fmt(hi, 2);
+  svg.append(t0, t1);
+  wrap.appendChild(svg);
+  return wrap;
+}
+{
+  const hists = document.getElementById("hists");
+  const l10 = v => Math.log10(Math.max(v, 1));
+  hists.appendChild(histPanel("member count (log10)", ROWS.map(r => l10(r.n)),
+    { fmtTick: v => "10^" + v.toFixed(1),
+      fmtBin: (a, z) => `[${Math.round(10**a).toLocaleString()}, ${Math.round(10**z).toLocaleString()})` }));
+  hists.appendChild(histPanel("coherence", ROWS.map(r => r.coherence)));
+  hists.appendChild(histPanel("mean dist to exemplar",
+    ROWS.map(r => r.meanDist), { lo: 0, hi: H.dict.threshold }));
+  hists.appendChild(histPanel("nn cosine (crowding)", ROWS.map(r => r.nn)));
+  hists.appendChild(histPanel("verbalizability", ROWS.map(r => r.verb),
+    { lo: 0, hi: 1 }));
+}
+
+// ---------------------------------------------------------------- sphere
+const SP = H.sphere || null;
+let hoverId = null;
+const canvas = document.getElementById("sphere");
+let ctx = null;
+try { ctx = canvas.getContext("2d"); } catch (e) { /* headless DOM */ }
+let yaw = 0.6, pitch = -0.35;
+let proj = [];
+
+function rot(p) {
+  const [x, y, z] = p;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const x1 = cy * x + sy * z, z1 = -sy * x + cy * z;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const y2 = cp * y - sp * z1, z2 = sp * y + cp * z1;
+  return [x1, y2, z2];
+}
+
+function drawSphere() {
+  if (!ctx || !SP) return;
+  const W = canvas.width, C = W / 2, R = W * 0.46;
+  ctx.clearRect(0, 0, W, W);
+  ctx.beginPath();
+  ctx.arc(C, C, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = "#ddd";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.lineWidth = 1.3;
+  for (const e of SP.edges) {
+    for (let s = 0; s + 5 < e.length; s += 3) {
+      const a = rot([e[s], e[s + 1], e[s + 2]]);
+      const b = rot([e[s + 3], e[s + 4], e[s + 5]]);
+      const z = (a[2] + b[2]) / 2;
+      ctx.strokeStyle = `rgba(160,160,160,${z > 0 ? 0.4 : 0.08})`;
+      ctx.beginPath();
+      ctx.moveTo(C + a[0] * R, C - a[1] * R);
+      ctx.lineTo(C + b[0] * R, C - b[1] * R);
+      ctx.stroke();
+    }
+  }
+
+  // points, back to front, sized by log member count. Radius and opacity
+  // shrink with K, or a dense dictionary saturates into a solid disc.
+  const maxN = Math.max(...ROWS.map(r => r.n), 1);
+  const K = SP.pts.length;
+  const kScale = Math.max(0.3, Math.min(1, Math.sqrt(300 / Math.max(K, 300))));
+  const aF = K > 800 ? 0.5 : 0.8, aB = K > 800 ? 0.10 : 0.22;
+  const order = SP.pts.map((p, i) => [rot(p), i]).sort((a, b) => a[0][2] - b[0][2]);
+  proj = new Array(SP.pts.length);
+  for (const [[x, y, z], i] of order) {
+    const px = C + x * R, py = C - y * R;
+    const n = ROWS[i] ? ROWS[i].n : 1;
+    const r = (2.2 + 5.5 * Math.sqrt(Math.log10(Math.max(n, 1)) /
+                                     Math.log10(Math.max(maxN, 10))))
+              * kScale * (W / 300);
+    proj[i] = [px, py, z];
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(230,126,0,${(z > 0 ? aF : aB).toFixed(2)})`;
+    ctx.fill();
+    if (i === hoverId) {
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#111";
+      ctx.stroke();
+    }
+  }
+}
+
+function pick(ev) {
+  if (!SP || !proj.length) return null;
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width;
+  const mx = (ev.clientX - rect.left) * sx, my = (ev.clientY - rect.top) * sx;
+  let best = null, bd = 14 * sx;
+  for (let i = 0; i < proj.length; i++) {
+    const [px, py, z] = proj[i];
+    const d = Math.hypot(px - mx, py - my) - (z > 0 ? 0 : 6 * sx);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+if (ctx && SP) {
+  if (!SP.edges.length)
+    document.getElementById("spherenote").innerHTML +=
+      ` Arcs omitted at K &gt; ${SP.edgeMaxK}.`;
+  let dragging = false, lx = 0, ly = 0, moved = 0;
+  canvas.addEventListener("pointerdown", ev => {
+    dragging = true; moved = 0; lx = ev.clientX; ly = ev.clientY;
+    canvas.classList.add("drag");
+    canvas.setPointerCapture(ev.pointerId);
+  });
+  canvas.addEventListener("pointermove", ev => {
+    if (dragging) {
+      yaw += (ev.clientX - lx) * 0.008;
+      pitch -= (ev.clientY - ly) * 0.008;
+      pitch = Math.max(-1.4, Math.min(1.4, pitch));
+      moved += Math.abs(ev.clientX - lx) + Math.abs(ev.clientY - ly);
+      lx = ev.clientX; ly = ev.clientY;
+      drawSphere();
+    } else {
+      const i = pick(ev);
+      if (i !== hoverId) { hoverId = i; drawSphere(); }
+      if (i != null) {
+        const r = ROWS[i];
+        tipShow(`<b>${r.i}</b>${r.label ? " · " + esc(r.label) : ""}<br>` +
+          `<span class="k">n</span> ${r.n.toLocaleString()} · ` +
+          `<span class="k">coh</span> ${fmt(r.coherence)} · ` +
+          `<span class="k">nn</span> ${fmt(r.nn)}<br>` +
+          esc((r.lensTop || []).map(showTok).join(" ")),
+          ev.clientX, ev.clientY);
+        canvas.style.cursor = "pointer";
+      } else { tipHide(); canvas.style.cursor = "grab"; }
+    }
+  });
+  canvas.addEventListener("pointerup", ev => {
+    dragging = false; canvas.classList.remove("drag");
+    if (moved < 4) { const i = pick(ev); if (i != null) location.href = pageOf(ROWS[i].i); }
+  });
+  canvas.addEventListener("pointerleave", () => {
+    if (hoverId != null) { hoverId = null; drawSphere(); }
+    tipHide();
+  });
+  drawSphere();
+} else if (!SP) {
+  document.getElementById("spherenote").textContent =
+    "No sphere layout in header.json — rebuild, or backfill with " +
+    "python -m epdashboard.geometry <out_dir>.";
+}
+
+// ------------------------------------------------------------ region table
+let rows = ROWS.slice(), key = "i", asc = true;
+const tbody = document.querySelector("#tbl tbody");
+function draw() {
+  const q = document.getElementById("q").value.toLowerCase();
+  const view = rows.filter(r => !q ||
+    (r.label || "").toLowerCase().includes(q) ||
+    (r.lensTop || []).join(" ").toLowerCase().includes(q) ||
+    String(r.i) === q.replace(/^#/, ""));
+  tbody.innerHTML = view.map(r =>
+    `<tr data-i="${r.i}"><td><a href="${pageOf(r.i)}">${r.i}</a></td>` +
+    `<td>${esc(r.label)}</td>` +
+    `<td class="num">${r.n.toLocaleString()}</td>` +
+    `<td class="num">${(r.density * 100).toFixed(3)}%</td>` +
+    `<td class="num">${fmt(r.coherence)}</td>` +
+    `<td class="num">${fmt(r.meanDist)}</td>` +
+    `<td class="num">${fmt(r.nn)}</td>` +
+    `<td class="num">${fmt(r.verb)}</td>` +
+    `<td class="toks">${esc((r.lensTop || []).map(showTok).join(" "))}</td></tr>`
+  ).join("");
+  const idx = {}; ROWS.forEach((r, i) => idx[r.i] = i);
+  tbody.querySelectorAll("tr").forEach(tr => {
+    tr.addEventListener("mouseenter", () => {
+      hoverId = idx[+tr.dataset.i]; drawSphere(); });
+    tr.addEventListener("mouseleave", () => { hoverId = null; drawSphere(); });
+  });
+}
+function sortBy(k) {
+  asc = key === k ? !asc : (k === "i" || k === "label");
+  key = k;
+  rows.sort((a, b) => {
+    const x = a[k] ?? -Infinity, y = b[k] ?? -Infinity;
+    return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1);
+  });
+  document.querySelectorAll("th[data-k]").forEach(th =>
+    th.querySelector(".dir").textContent =
+      th.dataset.k === key ? (asc ? "▲" : "▼") : "");
+  draw();
+}
+document.querySelectorAll("th[data-k]").forEach(th =>
+  th.addEventListener("click", () => sortBy(th.dataset.k)));
+document.getElementById("q").addEventListener("input", draw);
+sortBy("n");   // default: members desc
+
+// ---- footer provenance (replaces the old top bar)
+{
+  const d = H.dict;
+  document.getElementById("footer").innerHTML =
+    `<b>${esc(d.model_id)}</b> · layer ${d.layer}` +
+    (d.p != null ? ` · p=${d.p}` : "") +
+    ` · K=${d.K} · θ=${d.threshold} · d_model=${d.dModel}` +
+    ` &nbsp;|&nbsp; scanned ${H.scan.nActs.toLocaleString()} activations` +
+    ` (${esc(H.source.dataset || H.source.cache_dir || "?")}, ${esc(H.source.mode)})` +
+    ` · member-share corr ${H.scan.member_share_corr}` +
+    ` &nbsp;|&nbsp; EPDashboard · ${esc(d.run)}`;
+}
+</script>
+</body>
+</html>

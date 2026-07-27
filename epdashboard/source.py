@@ -105,18 +105,21 @@ class ForwardSource:
             self.prompts.extend(batch)
             yield res.x.astype(np.float32), gid, res.position_ids.astype(np.int64)
 
-    def pass2(self, gids: list[int]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
-        """gid -> (X (T,d), positions (T,)) for the winning prompts."""
-        out: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    def pass2(self, gids: list[int]):
+        """Yield ``(gid, X (T,d), positions (T,))`` per winning prompt.
+
+        A generator so the caller can fold each prompt into its per-region
+        caches and drop the raw activations — materialising all winners at
+        once is ~1 MB/prompt and was the other half of the measured OOM.
+        """
         gids = sorted(set(gids))
         for s in range(0, len(gids), self.cfg.prompt_batch_size):
             part = gids[s:s + self.cfg.prompt_batch_size]
             res = self._extract([self.prompts[g] for g in part])
             for i, g in enumerate(part):
                 m = res.prompt_ids == i
-                out[g] = (res.x[m].astype(np.float32),
-                          res.position_ids[m].astype(np.int64))
-        return out
+                yield (g, res.x[m].astype(np.float32),
+                       res.position_ids[m].astype(np.int64))
 
 
 class CacheSource:
@@ -165,31 +168,34 @@ class CacheSource:
                        pos[sl].astype(np.int64))
                 seen += len(x[sl])
 
-    def pass2(self, gids: list[int]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+    def pass2(self, gids: list[int]):
+        """Yield ``(gid, X, positions)`` per winning prompt (see ForwardSource).
+
+        ``extract_cache`` writes whole prompt batches per shard, so a prompt
+        never spans shards; each shard's winners are yielded as it is read.
+        """
         want = set(gids)
-        rows: dict[int, list[tuple[np.ndarray, np.ndarray]]] = {g: [] for g in want}
+        seen: set[int] = set()
         base = 0
         for data in self._shards():
             x, pid, pos = data["x"], data["prompt_ids"], data["position_ids"]
             n_local = len(data["prompts"])
             g = pid.astype(np.int64) + base
-            hit = np.isin(g, list(want))
-            if hit.any():
-                for gg in np.unique(g[hit]):
-                    m = g == gg
-                    rows[int(gg)].append((x[m].astype(np.float32),
-                                          pos[m].astype(np.int64)))
+            hit = np.isin(g, list(want & set(np.unique(g).tolist())))
+            for gg in np.unique(g[hit]):
+                gg = int(gg)
+                if gg in seen:
+                    logger.warning("pass2: gid %d spans shards — keeping the "
+                                   "first occurrence only", gg)
+                    continue
+                seen.add(gg)
+                m = g == gg
+                o = np.argsort(pos[m])
+                yield (gg, x[m].astype(np.float32)[o],
+                       pos[m].astype(np.int64)[o])
             base += n_local
-        out: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-        for g, parts in rows.items():
-            if not parts:
-                logger.warning("pass2: gid %d not found in cache", g)
-                continue
-            X = np.concatenate([p[0] for p in parts])
-            P = np.concatenate([p[1] for p in parts])
-            o = np.argsort(P)
-            out[g] = (X[o], P[o])
-        return out
+        for gg in want - seen:
+            logger.warning("pass2: gid %d not found in cache", gg)
 
 
 def make_source(cfg, layer: int):

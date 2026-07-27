@@ -77,16 +77,34 @@ def run(cfg: EPVisConfig) -> list[Path]:
     # ---------------------------------------------------------------- pass 2
     region_ids = [cfg.regions if cfg.regions is not None else list(range(d.K))
                   for d in dicts]
+    tok = source.tokenizer
+    pcs: list[PromptCache] = []
     winners: set[int] = set()
-    for s, ids in zip(scans, region_ids):
-        winners |= s.winner_gids(ids)
+    for d, s, ids in zip(dicts, scans, region_ids):
+        # gid -> regions that will request sequences from that prompt; the
+        # cache keeps only those similarity columns.
+        refs: dict[int, set[int]] = {}
+        for i in ids:
+            for rows in s.examples(i).values():
+                for r in rows:
+                    refs.setdefault(r["gid"], set()).add(i)
+        winners |= set(refs)
+        pcs.append(PromptCache(d, tok, cfg.bos_offset, refs))
     log.info("pass 2: gathering %d winning prompts…", len(winners))
-    gathered = source.pass2(sorted(winners))
+    n_done, next_log2 = 0, 5000
+    for g, X, positions in source.pass2(sorted(winners)):
+        ids_g = tok.encode(source.prompts[g], add_special_tokens=False)
+        for pc in pcs:
+            pc.add(g, source.prompts[g], X, positions, ids=ids_g)
+        n_done += 1
+        if n_done >= next_log2:
+            log.info("  gathered %d/%d prompts (%.0fs)", n_done, len(winners),
+                     time.time() - t0)
+            next_log2 += 5000
 
     # ------------------------------------------------------------------ lens
     log.info("lens tables…")
     lt = LensTables(cfg.model_id, cfg.layer, cfg.lens_cache_path(), cfg.lens_k)
-    tok = source.tokenizer
     decode_cache: dict[int, str] = {}
 
     def decode(tid: int) -> str:
@@ -98,12 +116,9 @@ def run(cfg: EPVisConfig) -> list[Path]:
 
     # ----------------------------------------------------------------- write
     pages: list[Path] = []
-    for d, s, ids in zip(dicts, scans, region_ids):
+    for d, s, ids, pc in zip(dicts, scans, region_ids, pcs):
         out_dir = out_root / d.run_dir.name
         log.info("[%s] building %d region records…", d.run_dir.name, len(ids))
-        pc = PromptCache(d, tok, cfg.bos_offset)
-        for g, (X, positions) in gathered.items():
-            pc.add(g, source.prompts[g], X, positions)
         lens_rows = lt.build(d.E, d.means, decode)
         header = write_dict_output(d, s, pc, lens_rows, ids,
                                    source.describe(), jlens_meta, cfg, out_dir)
@@ -145,7 +160,17 @@ def main() -> None:
                     help="extract_cache shard dir (skips the model entirely)")
     ap.add_argument("--regions", default=None,
                     help="e.g. '0:100' or '3,17,42' (default: all)")
+    ap.add_argument("--n-closest", type=int, default=None,
+                    help="sequences in the closest-members column")
+    ap.add_argument("--n-per-band", type=int, default=None,
+                    help="sequences per distance band")
+    ap.add_argument("--n-random", type=int, default=None,
+                    help="sequences in the random draw")
     ap.add_argument("--regions-per-batch", type=int, default=None)
+    ap.add_argument("--comp-max-k", type=int, default=None,
+                    help="skip the (K,K) competition graph above this K")
+    ap.add_argument("--batch-size", type=int, default=None,
+                    help="prompts per forward sub-batch (GPU memory knob)")
     ap.add_argument("--lens-cache", default=None)
     ap.add_argument("--device", default=None)
     ap.add_argument("--seed", type=int, default=None)
@@ -159,7 +184,12 @@ def main() -> None:
                 "context_length": args.context_length,
                 "n_prompts": args.n_prompts, "cache_dir": args.cache_dir,
                 "regions": (_parse_regions(args.regions) if args.regions else None),
+                "n_closest": args.n_closest,
+                "n_per_band": args.n_per_band,
+                "n_random": args.n_random,
                 "regions_per_batch": args.regions_per_batch,
+                "comp_max_k": args.comp_max_k,
+                "batch_size": args.batch_size,
                 "lens_cache": args.lens_cache, "device": args.device,
                 "seed": args.seed}
     for k, v in override.items():
