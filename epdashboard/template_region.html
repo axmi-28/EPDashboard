@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb; --page: #f9f9f7;
+  --ink-1: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6;         /* member / positive projection */
+  --neg: #e34948;              /* negative projection (diverging red pole) */
+  --pos-rgb: 42,120,214; --neg-rgb: 227,73,72;
+  --bg-hist: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-3: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --neg: #e66767;
+    --pos-rgb: 57,135,229; --neg-rgb: 230,103,103;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink-1);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--series-1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
+  padding: 10px 16px; border-bottom: 1px solid var(--grid); background: var(--surface-1); }
+header h1 { font-size: 15px; margin: 0; font-weight: 650; }
+.chip { color: var(--ink-2); font-size: 12px; }
+.chip b { color: var(--ink-1); font-weight: 600; }
+
+nav.regionnav { display: flex; gap: 8px; align-items: center; padding: 10px 16px; }
+nav.regionnav select { max-width: 560px; font: inherit; padding: 3px 6px;
+  background: var(--surface-1); color: var(--ink-1);
+  border: 1px solid var(--axis); border-radius: 6px; }
+nav.regionnav button { font: inherit; padding: 3px 10px; cursor: pointer;
+  background: var(--surface-1); color: var(--ink-1);
+  border: 1px solid var(--axis); border-radius: 6px; }
+nav.regionnav button:disabled { opacity: .4; cursor: default; }
+
+main { display: grid; grid-template-columns: 250px 340px minmax(360px, 1fr);
+  gap: 12px; padding: 0 16px 40px; align-items: start; }
+@media (max-width: 1100px) { main { grid-template-columns: 250px 1fr; }
+  #col3 { grid-column: 1 / -1; } }
+.panel { background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.panel h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.panel .note { color: var(--ink-3); font-size: 11px; margin: 2px 0 6px; }
+
+table.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.kv td { padding: 2px 0; }
+table.kv td:first-child { color: var(--ink-2); }
+table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+table.nbrs { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.nbrs td { padding: 2px 4px 2px 0; vertical-align: top; }
+table.nbrs td.cos { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+table.nbrs td.toks { color: var(--ink-3); overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; max-width: 130px; }
+
+.lensgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lenscol h4 { margin: 0 0 3px; font-size: 11px; font-weight: 600; color: var(--ink-2); }
+.tokline { display: flex; flex-wrap: wrap; gap: 3px; }
+.tk { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+  white-space: pre; font-size: 12px; background: rgba(var(--pos-rgb), .07); }
+.tk.neg { background: rgba(var(--neg-rgb), .07); }
+.meter { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 11px; color: var(--ink-2); }
+.meter .bar { flex: 1; height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
+.meter b { font-variant-numeric: tabular-nums; color: var(--ink-1); }
+
+svg.hist { display: block; width: 100%; height: 96px; }
+.axislab { font-size: 10px; fill: var(--ink-3); font-family: inherit; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+  margin-right: 4px; vertical-align: -1px; }
+
+.grp { margin-bottom: 14px; }
+.grp h4 { margin: 0 0 2px; font-size: 12px; font-weight: 650; }
+.grp .sub { color: var(--ink-3); font-size: 11px; margin-bottom: 5px; }
+.seq { padding: 3px 4px; border-radius: 4px; margin-bottom: 3px; display: flex; gap: 8px; }
+.seq:nth-child(odd) { background: rgba(137,135,129,.06); }
+.seq .m { flex: 0 0 58px; text-align: right; color: var(--ink-3); font-size: 11px;
+  font-variant-numeric: tabular-nums; padding-top: 1px; }
+.seq .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.t { white-space: pre-wrap; border-radius: 2px; padding: 0 0.5px; }
+.t.fire { font-weight: 650; box-shadow: inset 0 -2px 0 0 var(--ink-1); }
+.t.mem { box-shadow: inset 0 -1px 0 0 var(--ink-3); }
+.t.fire.mem { box-shadow: inset 0 -2px 0 0 var(--ink-1); }
+
+#tip { position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--axis);
+  border-radius: 6px; padding: 5px 8px; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  max-width: 320px; }
+#tip .k { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="index.html">EPDashboard</a> · <span id="dictname"></span></h1>
+  <span class="chip" id="dictchips"></span>
+</header>
+<nav class="regionnav">
+  <button id="prev">‹ prev</button>
+  <select id="regsel"></select>
+  <button id="next">next ›</button>
+  <span class="chip" id="regpos"></span>
+</nav>
+<main>
+  <div id="col1"></div>
+  <div id="col2"></div>
+  <div id="col3"></div>
+</main>
+<div id="tip"></div>
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const P = JSON.parse(document.getElementById("payload").textContent);
+const H = P.header, B = P.batch, FILE_OF = P.fileOf; // region id -> batch file
+const IDS = H.regionTable.map(r => r.i);
+const byId = {}; B.regions.forEach(r => { byId[r.i] = r; });
+
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const showTok = s => s.replace(/\n/g, "⏎").replace(/\t/g, "⇥");
+const fmt = (v, d=3) => v == null ? "–" : Number(v).toFixed(d);
+
+// ---------------------------------------------------------------- header
+{
+  const d = H.dict;
+  document.getElementById("dictname").textContent =
+    `${d.model_id} · L${d.layer}` + (d.p != null ? ` · p=${d.p}` : "");
+  document.title = `EPDashboard · ${d.run}`;
+  document.getElementById("dictchips").innerHTML =
+    `K <b>${d.K}</b> &nbsp; θ <b>${d.threshold}</b> &nbsp; scanned ` +
+    `<b>${H.scan.nActs.toLocaleString()}</b> acts &nbsp; member-share corr ` +
+    `<b>${H.scan.member_share_corr}</b> &nbsp; source <b>${esc(H.source.mode)}:` +
+    `${esc(H.source.dataset || H.source.cache_dir || "")}</b>`;
+}
+
+// ------------------------------------------------------------------ nav
+const sel = document.getElementById("regsel");
+for (const r of H.regionTable) {
+  const o = document.createElement("option");
+  o.value = r.i;
+  const lab = r.label ? ` · ${r.label}` : "";
+  o.textContent = `#${r.i}${lab} · n=${r.n} · ${(r.lensTop || []).map(showTok).join(" ")}`;
+  sel.appendChild(o);
+}
+function currentId() {
+  const m = location.hash.match(/r(\d+)/);
+  const id = m ? +m[1] : (B.regionIds[0]);
+  return byId[id] != null ? id : B.regionIds[0];
+}
+function go(id) {
+  if (byId[id] != null) { location.hash = "r" + id; render(); }
+  else { location.href = FILE_OF[id].replace(/\.json$/, ".html") + "#r" + id; }
+}
+sel.addEventListener("change", () => go(+sel.value));
+document.getElementById("prev").addEventListener("click", () => {
+  const k = IDS.indexOf(currentId()); if (k > 0) go(IDS[k - 1]);
+});
+document.getElementById("next").addEventListener("click", () => {
+  const k = IDS.indexOf(currentId()); if (k < IDS.length - 1) go(IDS[k + 1]);
+});
+window.addEventListener("hashchange", render);
+
+// -------------------------------------------------------------- tooltip
+const tip = document.getElementById("tip");
+function tipShow(html, ev) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + w > innerWidth - 4) x = ev.clientX - w - pad;
+  if (y + h > innerHeight - 4) y = ev.clientY - h - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function tipHide() { tip.style.display = "none"; }
+
+// ------------------------------------------------------------ histograms
+function histSVG(series, lo, hi, xlabel, hover) {
+  // series: [{counts, rgb, alpha}] drawn back-to-front, each peak-normalised.
+  const W = 316, Hh = 96, top = 4, bot = 16, n = series[0].counts.length;
+  const bw = W / n;
+  const ns = document.createElementNS.bind(document, "http://www.w3.org/2000/svg");
+  const svg = ns("svg");
+  svg.setAttribute("class", "hist");
+  svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+  const base = ns("line");
+  base.setAttribute("x1", 0); base.setAttribute("x2", W);
+  base.setAttribute("y1", Hh - bot); base.setAttribute("y2", Hh - bot);
+  base.setAttribute("stroke", "var(--axis)");
+  svg.appendChild(base);
+  for (const s of series) {
+    const peak = Math.max(1, ...s.counts);
+    for (let b = 0; b < n; b++) {
+      if (!s.counts[b]) continue;
+      const hgt = (Hh - top - bot) * s.counts[b] / peak;
+      const r = ns("rect");
+      r.setAttribute("x", (b * bw + 0.5).toFixed(1));
+      r.setAttribute("width", Math.max(0.8, bw - 1).toFixed(1));
+      r.setAttribute("y", (Hh - bot - hgt).toFixed(1));
+      r.setAttribute("height", hgt.toFixed(1));
+      r.setAttribute("rx", Math.min(2, bw / 3));
+      r.setAttribute("fill", `rgba(${s.rgb},${s.alpha})`);
+      svg.appendChild(r);
+    }
+  }
+  // invisible hover strips on top
+  for (let b = 0; b < n; b++) {
+    const r = ns("rect");
+    r.setAttribute("x", b * bw); r.setAttribute("width", bw);
+    r.setAttribute("y", 0); r.setAttribute("height", Hh - bot);
+    r.setAttribute("fill", "transparent");
+    const a = lo + (hi - lo) * b / n, z = lo + (hi - lo) * (b + 1) / n;
+    r.addEventListener("mousemove", ev => tipShow(hover(b, a, z), ev));
+    r.addEventListener("mouseleave", tipHide);
+    svg.appendChild(r);
+  }
+  const t0 = ns("text"), t1 = ns("text"), tl = ns("text");
+  t0.setAttribute("x", 0); t0.setAttribute("y", Hh - 3);
+  t0.setAttribute("class", "axislab"); t0.textContent = fmt(lo, 2);
+  t1.setAttribute("x", W); t1.setAttribute("y", Hh - 3);
+  t1.setAttribute("text-anchor", "end"); t1.setAttribute("class", "axislab");
+  t1.textContent = fmt(hi, 2);
+  tl.setAttribute("x", W / 2); tl.setAttribute("y", Hh - 3);
+  tl.setAttribute("text-anchor", "middle"); tl.setAttribute("class", "axislab");
+  tl.textContent = xlabel;
+  svg.append(t0, t1, tl);
+  return svg;
+}
+
+// --------------------------------------------------------------- tokens
+function tokenSpan(tokens, acts, mb, fi, scale, dist) {
+  const wrap = document.createElement("span");
+  const mem = new Set(mb || []);
+  tokens.forEach((tk, j) => {
+    const s = document.createElement("span");
+    s.className = "t" + (j === fi ? " fire" : "") + (mem.has(j) ? " mem" : "");
+    s.textContent = showTok(tk);
+    const v = acts[j];
+    if (v != null && scale > 0) {
+      const a = Math.min(0.55, Math.abs(v) / scale * 0.55);
+      s.style.background = `rgba(var(${v >= 0 ? "--pos-rgb" : "--neg-rgb"}),${a.toFixed(3)})`;
+    }
+    s.addEventListener("mousemove", ev => tipShow(
+      `<b>${esc(showTok(tk))}</b><br><span class="k">proj</span> ${v == null ? "– (pos 0)" : fmt(v)}` +
+      (j === fi ? `<br><span class="k">firing token · d=</span>${fmt(dist, 4)}` : "") +
+      `<br><span class="k">member:</span> ${mem.has(j) ? "yes" : "no"}`, ev));
+    s.addEventListener("mouseleave", tipHide);
+    wrap.appendChild(s);
+  });
+  return wrap;
+}
+
+// --------------------------------------------------------------- render
+function panel(title, note) {
+  const d = document.createElement("div");
+  d.className = "panel";
+  d.innerHTML = `<h3>${esc(title)}</h3>` + (note ? `<p class="note">${esc(note)}</p>` : "");
+  return d;
+}
+
+function lensBlock(parent, title, tab, verbLabel) {
+  const p = panel(title);
+  if (tab.verb != null) {
+    const m = document.createElement("div");
+    m.className = "meter";
+    m.innerHTML = `<span>${verbLabel}</span><span class="bar"><i style="width:${(tab.verb*100).toFixed(1)}%"></i></span><b>${fmt(tab.verb)}</b>`;
+    p.appendChild(m);
+  }
+  const g = document.createElement("div");
+  g.className = "lensgrid";
+  const mk = (name, toks, neg) => {
+    const c = document.createElement("div");
+    c.className = "lenscol";
+    c.innerHTML = `<h4>${name}</h4>`;
+    const line = document.createElement("div");
+    line.className = "tokline";
+    for (const t of toks) {
+      const s = document.createElement("span");
+      s.className = "tk" + (neg ? " neg" : "");
+      s.textContent = showTok(t);
+      line.appendChild(s);
+    }
+    c.appendChild(line);
+    g.appendChild(c);
+  };
+  mk("promoted", tab.pos, false);
+  mk("suppressed", tab.neg, true);
+  p.appendChild(g);
+  parent.appendChild(p);
+}
+
+function render() {
+  const id = currentId();
+  const r = byId[id];
+  sel.value = id;
+  const k = IDS.indexOf(id);
+  document.getElementById("prev").disabled = k <= 0;
+  document.getElementById("next").disabled = k >= IDS.length - 1;
+  document.getElementById("regpos").textContent = `${k + 1} / ${IDS.length}`;
+  const c1 = document.getElementById("col1"),
+        c2 = document.getElementById("col2"),
+        c3 = document.getElementById("col3");
+  c1.innerHTML = c2.innerHTML = c3.innerHTML = "";
+
+  // ---- col1: stats + neighbors
+  const st = r.stats;
+  const ps = panel("region " + r.i + (r.label ? " · " + r.label : ""));
+  ps.insertAdjacentHTML("beforeend", `<table class="kv">
+    <tr><td>members (build)</td><td>${st.n.toLocaleString()}</td></tr>
+    <tr><td>members (scan)</td><td>${st.nScan.toLocaleString()}</td></tr>
+    <tr><td>density</td><td>${(st.density * 100).toFixed(3)}%</td></tr>
+    <tr><td>coherence</td><td>${fmt(st.coherence)}</td></tr>
+    <tr><td>mean dist / θ</td><td>${fmt(st.meanDist, 3)} / ${fmt(H.dict.threshold, 3)}</td></tr>
+    <tr><td>proj mean ± sd</td><td>${fmt(st.projMean)} ± ${fmt(st.projSd)}</td></tr>
+    <tr><td>proj max</td><td>${fmt(st.projMax)}</td></tr>
+  </table>`);
+  c1.appendChild(ps);
+
+  const pn = panel("nearest regions", "full-space cosine between exemplars");
+  const tb = document.createElement("table");
+  tb.className = "nbrs";
+  for (const [j, cs] of r.neighbors) {
+    const row = H.regionTable.find(x => x.i === j) || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><a href="#" data-j="${j}">#${j}</a></td>` +
+      `<td class="cos">${fmt(cs)}</td>` +
+      `<td class="toks">${esc((row.lensTop || []).map(showTok).join(" "))}</td>`;
+    tr.querySelector("a").addEventListener("click", ev => { ev.preventDefault(); go(j); });
+    tb.appendChild(tr);
+  }
+  pn.appendChild(tb);
+  c1.appendChild(pn);
+
+  // ---- col2: histograms + lenses
+  const ph = r.projHist;
+  const p1 = panel("projection histogram",
+    `member tokens (n=${ph.nMember}, reservoir) vs corpus sample (n=${ph.nBg}); peak-normalised`);
+  p1.appendChild(histSVG(
+    [{counts: ph.bg, rgb: "137,135,129", alpha: 0.45},
+     {counts: ph.member, rgb: getComputedStyle(document.documentElement).getPropertyValue("--pos-rgb"), alpha: 0.9}],
+    ph.range[0], ph.range[1], "projection ⟨h−c, e⟩",
+    (b, a, z) => `<span class="k">proj ∈</span> [${fmt(a,2)}, ${fmt(z,2)})<br>` +
+      `<span class="k">members:</span> ${ph.member[b]} &nbsp; <span class="k">corpus:</span> ${ph.bg[b]}`));
+  const lg = document.createElement("div");
+  lg.className = "legend";
+  lg.innerHTML = `<span><i style="background:var(--series-1)"></i>members</span>` +
+    `<span><i style="background:rgba(137,135,129,.55)"></i>corpus sample</span>`;
+  p1.appendChild(lg);
+  c2.appendChild(p1);
+
+  const dh = r.distHist;
+  const p2 = panel("distance to exemplar",
+    "all scanned members, bins over [0, θ] — region tightness");
+  p2.appendChild(histSVG(
+    [{counts: dh.counts, rgb: getComputedStyle(document.documentElement).getPropertyValue("--pos-rgb"), alpha: 0.9}],
+    0, dh.max, "cosine distance to exemplar",
+    (b, a, z) => `<span class="k">d ∈</span> [${fmt(a,3)}, ${fmt(z,3)})<br>` +
+      `<span class="k">members:</span> ${dh.counts[b]}`));
+  c2.appendChild(p2);
+
+  const L = r.lens;
+  lensBlock(c2, "logit lens · exemplar", L.exemplar, "verbalizability");
+  lensBlock(c2, "logit lens · mean member direction", L.mean, "verbalizability");
+  if (L.jlens) {
+    lensBlock(c2, `j-lens · exemplar (n=${H.lens.jNPrompts} fit prompts)`, L.jlens, "verbalizability");
+    lensBlock(c2, "j-lens · mean member direction", L.jlensMean, "verbalizability");
+  }
+
+  // ---- col3: sequence groups
+  let scale = st.projMax || 0;
+  for (const g of r.groups)
+    for (const s of g.seqs)
+      for (const v of s.act) if (v != null) scale = Math.max(scale, Math.abs(v));
+  for (const g of r.groups) {
+    const div = document.createElement("div");
+    div.className = "grp";
+    div.innerHTML = `<h4>${esc(g.title)}</h4>` +
+      (g.subtitle ? `<div class="sub">${esc(g.subtitle)}</div>` : "");
+    if (!g.seqs.length)
+      div.insertAdjacentHTML("beforeend", `<div class="sub">no examples</div>`);
+    for (const s of g.seqs) {
+      const row = document.createElement("div");
+      row.className = "seq";
+      const m = document.createElement("span");
+      m.className = "m";
+      m.textContent = "d " + fmt(s.d, 3);
+      m.title = "cosine distance to exemplar; proj " + fmt(s.v);
+      row.appendChild(m);
+      const txt = document.createElement("span");
+      txt.className = "txt";
+      txt.appendChild(tokenSpan(s.tok, s.act, s.mb, s.fi, scale, s.d));
+      row.appendChild(txt);
+      div.appendChild(row);
+    }
+    c3.appendChild(div);
+  }
+}
+render();
+</script>
+</body>
+</html>
