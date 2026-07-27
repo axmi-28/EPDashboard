@@ -1,9 +1,7 @@
 # EPDashboard
 
-Feature-dashboard tooling for Exemplar Partitioning dictionaries — the EP
-analogue of [SAEDashboard](https://github.com/jbloomAus/SAEDashboard).
-Region-level dashboards first; dictionary-level view planned on top of the
-same `header.json`. Methodology and design rationale: [DECISIONS.md](DECISIONS.md).
+Feature-dashboard tooling for Exemplar Partitioning dictionaries, 
+refer back to [SAEDashboard](https://github.com/jbloomAus/SAEDashboard).
 
 ## Quick start
 
