@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import logging
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from epdashboard.config import EPVisConfig
-from epdashboard.html import render_batches, render_index
+from epdashboard.html import render_batches
 from epdashboard.lens import LensTables
 from epdashboard.scan import EPDict, RegionScan
 from epdashboard.sequences import PromptCache
@@ -29,11 +30,46 @@ from epdashboard.writer import write_dict_output
 log = logging.getLogger("epdashboard")
 
 
+def is_complete(out_root: Path, run_name: str) -> bool:
+    """True when a run dir holds a finished dashboard.
+
+    "Finished" means the header parses *and* every batch file it references is
+    on disk — a run killed midway through writing batches leaves a header from
+    the previous attempt or no header at all, and must not be skipped.
+    """
+    header = out_root / run_name / "header.json"
+    if not header.exists():
+        return False
+    try:
+        h = json.loads(header.read_text())
+    except (ValueError, OSError):
+        return False
+    batches = h.get("batches")
+    if not batches:
+        return False
+    return all((out_root / run_name / b["file"]).exists() for b in batches)
+
+
 def run(cfg: EPVisConfig) -> list[Path]:
     t0 = time.time()
     dicts = [EPDict.load(rd) for rd in cfg.run_dirs]
     if not dicts:
         raise ValueError("no run_dirs given")
+
+    # Skip dictionaries already built. Done before make_source so that a fully
+    # complete run costs nothing at all — the activation pass is the whole job,
+    # and a preempted 64-layer sweep must not redo the layers it finished.
+    if cfg.skip_existing:
+        out_root = cfg.out_path()
+        keep = [d for d in dicts if not is_complete(out_root, d.run_dir.name)]
+        for d in dicts:
+            if d not in keep:
+                log.info("skip %s: dashboard already complete", d.run_dir.name)
+        if not keep:
+            log.info("all %d dictionary/ies already built; nothing to do",
+                     len(dicts))
+            return []
+        dicts = keep
 
     # Model/layer come from dictionary metadata unless overridden; every dict
     # in one run must agree, since they share the activation stream.
@@ -126,9 +162,10 @@ def run(cfg: EPVisConfig) -> list[Path]:
                  d.run_dir.name, len(header["batches"]),
                  header["scan"]["member_share_corr"])
         if cfg.html:
-            pages += render_batches(out_dir, header)
-            pages.append(render_index(out_dir, header))
-            log.info("[%s] wrote %s", d.run_dir.name, out_dir / "index.html")
+            new = render_batches(out_dir, header)
+            pages += new
+            log.info("[%s] wrote %d region page(s), first: %s",
+                     d.run_dir.name, len(new), new[0] if new else "—")
     log.info("done in %.0fs", time.time() - t0)
     return pages
 
@@ -175,6 +212,10 @@ def main() -> None:
     ap.add_argument("--device", default=None)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--no-html", action="store_true")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="skip dictionaries whose dashboard is already "
+                         "complete; makes a multi-layer batch resumable after "
+                         "a preemption")
     args = ap.parse_args()
 
     cfg = EPVisConfig.from_json(args.config) if args.config else EPVisConfig()
@@ -197,6 +238,8 @@ def main() -> None:
             setattr(cfg, k, v)
     if args.no_html:
         cfg.html = False
+    if args.skip_existing:
+        cfg.skip_existing = True
 
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

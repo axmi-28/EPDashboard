@@ -3,11 +3,16 @@
 Layout under ``<out_dir>/<dict_name>/``:
 
     header.json        dictionary-level metadata, provenance, batch manifest,
-                       and a compact per-region summary table (the raw data
-                       behind the future dictionary-level dashboard)
+                       and a compact per-region summary table — the raw data a
+                       host (Neuronpedia) needs to build its own dictionary view
     regions_000.json   full region records, ``regions_per_batch`` per file
-    index.html         region table + dictionary stats        (html.py)
+    vectors.npz        exemplar + mean direction per region   (vectors.py)
     regions_000.html   self-contained region cards, one per batch (html.py)
+
+The region pages are the only HTML emitted; there is no dictionary-level page.
+``header.json`` is still dictionary-level *data* and stays — the region pages
+read the summary table for neighbour labels, and it is the export a host
+renders its own overview from.
 """
 
 from __future__ import annotations
@@ -20,9 +25,10 @@ from pathlib import Path
 import numpy as np
 
 from epdashboard import __version__
-from epdashboard.geometry import nn_cosine, sphere_payload
+from epdashboard.geometry import nn_cosine
 from epdashboard.scan import EPDict, RegionScan
 from epdashboard.sequences import PromptCache, build_groups
+from epdashboard.vectors import write_vectors
 
 
 def nearest_regions(E: np.ndarray, k: int) -> list[list]:
@@ -174,6 +180,10 @@ def write_dict_output(d: EPDict, scan: RegionScan, pc: PromptCache,
                 "density": r["stats"]["density"],
                 "coherence": r["stats"]["coherence"],
                 "meanDist": r["stats"]["meanDist"],
+                # J-lens only, and deliberately no fallback to the logit-lens
+                # table: absent means "this model has no Jacobian lens", which
+                # the UI renders as "–" rather than as a low score.
+                "verb": r["lens"].get("jlens", {}).get("verb"),
                 "nn": round(float(nn[r["i"]]), 3),
                 "margin": r["stats"]["margin"],
                 "contested": r["stats"]["contested"],
@@ -206,10 +216,11 @@ def write_dict_output(d: EPDict, scan: RegionScan, pc: PromptCache,
                    "histBins": cfg.hist_bins, "reservoir": cfg.reservoir,
                    "bgSample": int(bg.shape[0]), "nClosest": cfg.n_closest,
                    "nPerBand": cfg.n_per_band, "nRandom": cfg.n_random},
-        "sphere": sphere_payload(d.E),
         "batches": batches,
         "regionTable": summary,
     }
+    if cfg.export_vectors:
+        header["vectors"] = write_vectors(d, ids, cfg, out_dir)
     (out_dir / "header.json").write_text(
         json.dumps(header, ensure_ascii=False, separators=(",", ":")))
     return header

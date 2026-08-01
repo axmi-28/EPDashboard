@@ -1,9 +1,13 @@
-"""Render the self-contained local HTML pages from the JSON dataset.
+"""Render the self-contained region pages from the JSON dataset.
 
 Every page inlines its own data (no fetch), so the output opens directly from
-``file://`` — one ``regions_NNN.html`` per JSON batch plus an ``index.html``
-with the sortable region table. Re-rendering after a data rebuild is just
-re-running this module; the JSON is the source of truth.
+``file://`` — one ``regions_NNN.html`` per JSON batch. Re-rendering after a
+data rebuild is just re-running this module; the JSON is the source of truth.
+
+Region pages are the *only* HTML this tool emits, matching SAEDashboard, whose
+unit of output is the feature dashboard. The dictionary-level view is
+Neuronpedia's to host; ``header.json`` carries everything it needs (the
+per-region summary table, provenance, scan stats, and the vector export).
 """
 
 from __future__ import annotations
@@ -12,7 +16,6 @@ import json
 from pathlib import Path
 
 TEMPLATE = Path(__file__).parent / "template_region.html"
-TEMPLATE_DICT = Path(__file__).parent / "template_dict.html"
 
 
 def _embed(obj) -> str:
@@ -48,21 +51,7 @@ def render_batches(out_dir: Path, header: dict) -> list[Path]:
 def render_all(out_dir: Path) -> list[Path]:
     """Re-render every HTML page of one dict's output from its JSON."""
     header = json.loads((out_dir / "header.json").read_text())
-    return render_batches(out_dir, header) + [render_index(out_dir, header)]
-
-
-def render_index(out_dir: Path, header: dict) -> Path:
-    """The dictionary-level dashboard (region table, distributions, sphere)."""
-    tpl = TEMPLATE_DICT.read_text()
-    file_of = {}
-    for b in header["batches"]:
-        for i in b["regions"]:
-            file_of[i] = b["file"]
-    page = (tpl.replace("__TITLE__", f"EPDashboard · {header['dict']['run']}")
-               .replace("__DATA__", _embed({"header": header, "fileOf": file_of})))
-    path = out_dir / "index.html"
-    path.write_text(page)
-    return path
+    return render_batches(out_dir, header)
 
 
 if __name__ == "__main__":

@@ -241,7 +241,12 @@ function sect(parent, titleHTML, note) {
 }
 
 function lensSect(parent, title, tab) {
-  const d = sect(parent, title);
+  // Only the J-lens tables carry `verb` (see epdashboard/lens.py), so this
+  // presence check is what scopes verbalizability to the J-lens panels — the
+  // logit-lens panels deliberately show no score rather than a misleading one.
+  const d = sect(parent, title +
+    (tab.verb != null
+      ? `<span class="sub">verbalizability = ${fmt(tab.verb)}</span>` : ""));
   const cols = document.createElement("div");
   cols.className = "lenscols";
   const mk = (name, toks, cls) => {
@@ -383,7 +388,10 @@ function render() {
   lensSect(c2, "logit lens · exemplar", L.exemplar);
   lensSect(c2, "logit lens · mean dir", L.mean);
   if (L.jlens) {
-    lensSect(c2, `j-lens · exemplar`, L.jlens);
+    // The verbalizability level tracks the J fit budget, so the budget is
+    // named next to the score rather than left in the header caption.
+    const jn = H.lens.jNPrompts ? ` (J fit n=${H.lens.jNPrompts})` : "";
+    lensSect(c2, `j-lens · exemplar${jn}`, L.jlens);
     lensSect(c2, "j-lens · mean dir", L.jlensMean);
   }
 
@@ -418,8 +426,7 @@ function render() {
     ` (${esc(H.source.dataset || H.source.cache_dir || "?")}, ${esc(H.source.mode)})` +
     ` · member-share corr ${H.scan.member_share_corr}` +
     (H.lens.jlens ? ` · j-lens n=${H.lens.jNPrompts}` : "") +
-    ` &nbsp;|&nbsp; <a href="index.html">dictionary view</a>` +
-    ` · EPDashboard · ${esc(d.run)}`;
+    ` &nbsp;|&nbsp; EPDashboard · ${esc(d.run)}`;
 }
 render();
 </script>

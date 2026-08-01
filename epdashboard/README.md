@@ -3,6 +3,11 @@
 Feature-dashboard tooling for Exemplar Partitioning dictionaries, 
 refer back to [SAEDashboard](https://github.com/jbloomAus/SAEDashboard).
 
+The unit of output is the **region page**, exactly as SAEDashboard's is the
+feature dashboard. There is no dictionary-level page — that view belongs to
+whoever hosts the dashboards (Neuronpedia), and `header.json` carries the data
+it needs to build one.
+
 ## Quick start
 
 ```bash
@@ -32,10 +37,27 @@ Output per dictionary, under `<out>/<run_name>/`:
 |------|----------|
 | `header.json` | dict metadata, provenance, replay check, batch manifest, region summary table |
 | `regions_NNN.json` | full region records, `regions_per_batch` per file |
-| `index.html` | sortable/filterable region table (open this) |
-| `regions_NNN.html` | region cards, self-contained, `file://`-friendly |
+| `vectors.npz` | `exemplar` / `mean` direction per region + the calibration `center` |
+| `regions_NNN.html` | region cards, self-contained, `file://`-friendly (open these) |
 
 `<out>/config.json` records the exact config used.
+
+### Region vectors
+
+`vectors.npz` holds the two candidate directions per region, rows aligned to
+`regionIds` (**not** to the region index, unless the run built all K):
+
+- `mean` — mean of the member unit vectors, renormalised. The "average region
+  vector"; use this one for steering.
+- `exemplar` — the seed activation that defines the cell. Use it for membership
+  tests and ablation, not as a summary of the region's contents.
+- `center` — the calibration center. Both directions are unit vectors in
+  *centered* space, `(h − center)/‖h − center‖`. Additive steering
+  (`h + α·v`) is unaffected by the center; projection/ablation is not, and must
+  center first: `h' = center + (I − vvᵀ)(h − center)`.
+
+`python -m epdashboard.vectors <out>/<run_name> --which mean` flattens them into
+a JSONL shaped for Neuronpedia's vector upload (`Neuron.vector` / `hasVector`).
 
 ## Config
 
@@ -63,7 +85,13 @@ common ones as CLI flags). Highlights:
 - **projection histogram** — member reservoir vs corpus subsample
 - **distance-to-exemplar histogram** — region tightness over [0, θ]
 - **logit lens** — promoted/suppressed tokens for exemplar and mean member
-  direction, plus J-lens where a Jacobian lens exists
+  direction, plus J-lens where a Jacobian lens exists. J-lens panels also
+  report **verbalizability** (`1 − H/ln|V|`): 1 = the vocab readout spikes on
+  a few tokens, 0 = it is flat and the top-k list is noise. Reported for the
+  J-lens only — a mid-layer direction pushed straight through the unembedding
+  is not on the model's output path, so its entropy scores the lens, not the
+  region. The level is not comparable across models or across J fit budgets,
+  so the fit `n` is printed beside it
 - **sequences** — closest members, near/mid/far distance bands, random draw;
   tokens colored by projection, region members underlined, firing token
   marked

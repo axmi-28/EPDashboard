@@ -92,12 +92,25 @@ class EPVisConfig:
 
     # --------------------------------------------------------------- output
     out_dir: str = "epdash_out"
+    #: Skip dictionaries whose dashboard is already complete under ``out_dir``
+    #: (header parses and every batch file it lists exists). Makes a batch over
+    #: many layers resumable after a preemption instead of rebuilding from
+    #: scratch. Checked before the activation pass, so a finished run is free.
+    skip_existing: bool = False
     #: Regions per JSON/HTML batch file (SAEDashboard:
     #: ``n_features_at_a_time``).
     regions_per_batch: int = 256
     html: bool = True
     #: Cache dir for unembedding/J-lens npz files (default: <out_dir>/.lens).
     lens_cache: str | None = None
+    #: Write ``vectors.npz`` (exemplar + mean member direction per region, plus
+    #: the calibration center) alongside the JSON batches. These are the
+    #: steering/ablation vectors — see ``epdashboard.vectors``.
+    export_vectors: bool = True
+    #: Storage dtype for the exported vectors. float16 halves the file and is
+    #: below the noise floor of a direction whose members span a whole cell;
+    #: use float32 if something downstream refuses half precision.
+    vector_dtype: str = "float16"
 
     # ------------------------------------------------------------- plumbing
     def out_path(self) -> Path:

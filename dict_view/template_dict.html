@@ -95,6 +95,7 @@ input#q { font: 12px system-ui; padding: 3px 6px; margin: 0 0 8px; width: 300px;
         <th data-k="coherence" class="num">coherence <span class="dir"></span></th>
         <th data-k="meanDist" class="num">mean dist <span class="dir"></span></th>
         <th data-k="nn" class="num">nn cos <span class="dir"></span></th>
+        <th data-k="verb" class="num">j-verb. <span class="dir"></span></th>
         <th>top lens tokens</th>
       </tr></thead><tbody></tbody></table>
       </div>
@@ -218,6 +219,12 @@ function histPanel(title, values, opts = {}) {
   hists.appendChild(histPanel("mean dist to exemplar",
     ROWS.map(r => r.meanDist), { lo: 0, hi: H.dict.threshold }));
   hists.appendChild(histPanel("nn cosine (crowding)", ROWS.map(r => r.nn)));
+  // J-lens only. histPanel renders "no data" when the model has no Jacobian
+  // lens, so this needs no guard. The fit budget is in the caption above:
+  // the level is not comparable across models or across J fit budgets.
+  hists.appendChild(histPanel(
+    "j-lens verbalizability" + (H.lens.jlens ? ` (J fit n=${H.lens.jNPrompts})` : ""),
+    ROWS.map(r => r.verb), { lo: 0, hi: 1 }));
 }
 
 // ---------------------------------------------------------------- sphere
@@ -329,8 +336,9 @@ if (ctx && SP) {
         tipShow(`<b>${r.i}</b>${r.label ? " · " + esc(r.label) : ""}<br>` +
           `<span class="k">n</span> ${r.n.toLocaleString()} · ` +
           `<span class="k">coh</span> ${fmt(r.coherence)} · ` +
-          `<span class="k">nn</span> ${fmt(r.nn)}<br>` +
-          esc((r.lensTop || []).map(showTok).join(" ")),
+          `<span class="k">nn</span> ${fmt(r.nn)}` +
+          (r.verb != null ? ` · <span class="k">j-verb</span> ${fmt(r.verb)}` : "") +
+          `<br>` + esc((r.lensTop || []).map(showTok).join(" ")),
           ev.clientX, ev.clientY);
         canvas.style.cursor = "pointer";
       } else { tipHide(); canvas.style.cursor = "grab"; }
@@ -368,6 +376,7 @@ function draw() {
     `<td class="num">${fmt(r.coherence)}</td>` +
     `<td class="num">${fmt(r.meanDist)}</td>` +
     `<td class="num">${fmt(r.nn)}</td>` +
+    `<td class="num">${fmt(r.verb)}</td>` +
     `<td class="toks">${esc((r.lensTop || []).map(showTok).join(" "))}</td></tr>`
   ).join("");
   const idx = {}; ROWS.forEach((r, i) => idx[r.i] = i);

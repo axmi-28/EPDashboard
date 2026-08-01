@@ -28,6 +28,8 @@ from typing import Iterator
 
 import numpy as np
 
+from qwen_ep import acts_dtype
+
 logger = logging.getLogger(__name__)
 
 Chunk = tuple[np.ndarray, np.ndarray, np.ndarray]  # X (n,d), gid (n,), pos (n,)
@@ -156,7 +158,8 @@ class CacheSource:
         max_acts = self.cfg.n_prompts * (self.cfg.context_length - 1)
         seen = 0
         for data in self._shards():
-            x, pid, pos = data["x"], data["prompt_ids"], data["position_ids"]
+            x = acts_dtype.read_shard_x(data, self.manifest)
+            pid, pos = data["prompt_ids"], data["position_ids"]
             base = len(self.prompts)
             self.prompts.extend(str(p) for p in data["prompts"])
             for s in range(0, len(x), self.cfg.chunk_size):
@@ -178,7 +181,8 @@ class CacheSource:
         seen: set[int] = set()
         base = 0
         for data in self._shards():
-            x, pid, pos = data["x"], data["prompt_ids"], data["position_ids"]
+            x = acts_dtype.read_shard_x(data, self.manifest)
+            pid, pos = data["prompt_ids"], data["position_ids"]
             n_local = len(data["prompts"])
             g = pid.astype(np.int64) + base
             hit = np.isin(g, list(want & set(np.unique(g).tolist())))
