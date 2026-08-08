@@ -1,24 +1,27 @@
-
+# --- junk ---
 __pycache__/
-
 *.pyc
-
-.venv/
-runs/
-activations_cache/
-figures/
-logs/
-exemplar-partitioning/
-qwen_ep/persona_assets/
-epdash_out/
 .DS_Store
-epdashboard/DECISIONS.md
-MODAL.md
 
+# --- environments & vendored clones ---
+.venv/
+exemplar-partitioning/
+
+# --- generated data (large): dictionaries, caches, dashboards, logs, figures ---
+artifacts/
+
+# --- local-only infra & notes ---
+docs/epdashboard/MODAL.md
+epdashboard/DECISIONS.md
+modal/epdash.py
+scripts/
+
+# --- qwen_ep: track only the reusable modules ---
 qwen_ep/*
 !qwen_ep/__init__.py
 !qwen_ep/adapter.py
 !qwen_ep/lens_weights.py
 !qwen_ep/jlens_weights.py
-modal_epdash.py
-epdash_out_27b/
+
+# --- experiments: persona assets are vendored from the paper's repo ---
+experiments/persona/assets/

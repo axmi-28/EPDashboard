@@ -144,15 +144,30 @@ class QwenModel:
         device: str | None = None,
         dtype: torch.dtype = torch.bfloat16,
         prepend_bos: bool = False,
+        revision: str | None = None,
+        tokenizer_id: str | None = None,
+        tokenizer_revision: str | None = None,
     ):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.model_id = model_id
+        self.revision = revision
         self.device = _pick_device(device)
         self.prepend_bos = prepend_bos
 
-        logger.info("loading tokenizer %s", model_id)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        # ``tokenizer_id`` exists for checkpoint *pairs*. Two repos can carry the
+        # same vocabulary and still tokenize differently: cais/Zephyr_RMU ships
+        # only tokenizer.model, so transformers reconstructs a fast tokenizer
+        # with add_prefix_space=True, while its base HuggingFaceH4/zephyr-7b-beta
+        # ships a tokenizer.json with add_prefix_space=False. Identical text then
+        # yields different ids, and any paired activation comparison is silently
+        # comparing different token streams.
+        tok_id = tokenizer_id or model_id
+        tok_rev = tokenizer_revision if tokenizer_id else revision
+        logger.info("loading tokenizer %s%s", tok_id,
+                    "" if tok_id == model_id else f" (overriding {model_id})")
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tok_id, trust_remote_code=True, revision=tok_rev)
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         # Right-pad so content sits at positions [0, L) and pads trail.
@@ -165,6 +180,7 @@ class QwenModel:
             dtype=dtype,
             trust_remote_code=True,
             low_cpu_mem_usage=True,
+            revision=revision,
         )
         self.model.to(self.device)
         self.model.eval()
@@ -199,6 +215,106 @@ class QwenModel:
 
     # -------------------------------------------------------------- extraction
     @torch.no_grad()
+    def extract_per_position_multi(
+        self,
+        prompts: Iterable[str],
+        layers: "list[int]",
+        max_positions_per_prompt: int | None = None,
+        batch_size: int = 16,
+        skip_first: bool = True,
+    ) -> "dict[int, ExtractionResult]":
+        """Harvest several layers from **one** forward pass.
+
+        A 27B forward is the same cost whether you read one residual stream or
+        all 64, so extracting layer-by-layer pays for the model N times over.
+        Returns ``{layer: ExtractionResult}``; every result shares identical
+        ``prompt_ids`` / ``position_ids``, since they come from the same tokens.
+
+        Peak host RAM is ``len(layers)`` × one sub-batch of activations, so the
+        caller should keep ``batch_size`` modest when sweeping many layers.
+        """
+        prompts = list(prompts)
+        empty = lambda: ExtractionResult(
+            x=np.zeros((0, self.d_model), dtype=np.float32))
+        if not prompts:
+            return {l: empty() for l in layers}
+        for l in layers:
+            if not (0 <= l < self.n_layers):
+                raise ValueError(f"layer {l} out of range [0, {self.n_layers})")
+
+        per_layer_x: dict[int, list[np.ndarray]] = {l: [] for l in layers}
+        all_prompt_ids: list[np.ndarray] = []
+        all_position_ids: list[np.ndarray] = []
+        total_tokens = 0
+        n_fwd = 0
+        first_pos = 1 if skip_first else 0
+
+        for start in range(0, len(prompts), batch_size):
+            sub = prompts[start:start + batch_size]
+            enc = self.tokenizer(
+                sub, return_tensors="pt", padding=True, truncation=False,
+                add_special_tokens=self.prepend_bos,
+            )
+            input_ids = enc["input_ids"].to(self.device)
+            attn = enc["attention_mask"].to(self.device)
+            lengths = attn.sum(dim=1)
+            if max_positions_per_prompt is not None:
+                lengths = torch.clamp(lengths, max=max_positions_per_prompt)
+            total_tokens += int(lengths.sum().item())
+
+            captured: dict[int, "torch.Tensor"] = {}
+
+            def make_hook(idx: int):
+                def hook(module, inputs, output):
+                    captured[idx] = output[0] if isinstance(output, tuple) else output
+                return hook
+
+            handles = [self.layers[l].register_forward_hook(make_hook(l))
+                       for l in layers]
+            try:
+                self.model(input_ids=input_ids, attention_mask=attn, use_cache=False)
+            finally:
+                for h in handles:
+                    h.remove()
+            n_fwd += 1
+
+            # Mask is identical across layers — same tokens, same lengths.
+            any_acts = captured[layers[0]]
+            T = any_acts.shape[1]
+            positions = torch.arange(T, device=any_acts.device)
+            keep = ((positions[None, :] < lengths[:, None])
+                    & (positions[None, :] >= first_pos))
+            for l in layers:
+                per_layer_x[l].append(
+                    captured[l][keep].detach().to("cpu", dtype=torch.float32).numpy())
+
+            lens_np = lengths.cpu().numpy()
+            for i, L in enumerate(lens_np):
+                L = int(L)
+                if L <= first_pos:
+                    continue
+                n_kept = L - first_pos
+                all_prompt_ids.append(np.full(n_kept, start + i, dtype=np.int64))
+                all_position_ids.append(np.arange(first_pos, L, dtype=np.int64))
+
+            captured.clear()
+            del any_acts, input_ids, attn
+
+        prompt_ids = (np.concatenate(all_prompt_ids) if all_prompt_ids
+                      else np.array([], dtype=np.int64))
+        position_ids = (np.concatenate(all_position_ids) if all_position_ids
+                        else np.array([], dtype=np.int64))
+        out = {}
+        for l in layers:
+            xs = per_layer_x[l]
+            out[l] = ExtractionResult(
+                x=np.concatenate(xs) if xs
+                else np.zeros((0, self.d_model), np.float32),
+                prompt_ids=prompt_ids, position_ids=position_ids,
+                n_forward_passes=n_fwd, n_tokens=total_tokens,
+            )
+        return out
+
     def extract_per_position(
         self,
         prompts: Iterable[str],

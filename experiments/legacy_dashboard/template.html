@@ -1,0 +1,2233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EP Explorer · Exemplar Partitioning</title>
+<style>
+:root {
+  color-scheme: light;
+  --plane: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f7;
+  --ink: #16181d;
+  --ink-2: #565b66;
+  --muted: #8b909c;
+  --hairline: #e4e6ec;
+  --accent: #2a78d6;
+  --accent-soft: rgba(42,120,214,0.10);
+  --neighbor: #eb6834;
+  --neighbor-soft: rgba(235,104,52,0.12);
+  --tokmark-bg: rgba(22,163,74,0.16);
+  --tokmark-line: #16a34a;
+  --bar-track: #edeff4;
+  --shadow: 0 1px 3px rgba(16,18,24,0.07), 0 4px 16px rgba(16,18,24,0.05);
+  --ramp-0: #9ec5f4; --ramp-1: #5598e7; --ramp-2: #2a78d6; --ramp-3: #1c5cab; --ramp-4: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane: #0d0e12;
+    --surface: #171a21;
+    --surface-2: #1f232c;
+    --ink: #f2f3f7;
+    --ink-2: #b8bcc8;
+    --muted: #7d838f;
+    --hairline: #262a33;
+    --accent: #3987e5;
+    --accent-soft: rgba(57,135,229,0.16);
+    --neighbor: #d95926;
+    --neighbor-soft: rgba(217,89,38,0.18);
+    --tokmark-bg: rgba(52,211,153,0.20);
+    --tokmark-line: #34d399;
+    --bar-track: #262a33;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --ramp-0: #184f95; --ramp-1: #2a78d6; --ramp-2: #5598e7; --ramp-3: #86b6ef; --ramp-4: #cde2fb;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0d0e12;
+  --surface: #171a21;
+  --surface-2: #1f232c;
+  --ink: #f2f3f7;
+  --ink-2: #b8bcc8;
+  --muted: #7d838f;
+  --hairline: #262a33;
+  --accent: #3987e5;
+  --accent-soft: rgba(57,135,229,0.16);
+  --neighbor: #d95926;
+  --neighbor-soft: rgba(217,89,38,0.18);
+  --tokmark-bg: rgba(52,211,153,0.20);
+  --tokmark-line: #34d399;
+  --bar-track: #262a33;
+  --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  --ramp-0: #184f95; --ramp-1: #2a78d6; --ramp-2: #5598e7; --ramp-3: #86b6ef; --ramp-4: #cde2fb;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --plane: #f7f8fa; --surface: #ffffff; --surface-2: #f1f3f7;
+  --ink: #16181d; --ink-2: #565b66; --muted: #8b909c; --hairline: #e4e6ec;
+  --accent: #2a78d6; --accent-soft: rgba(42,120,214,0.10);
+  --neighbor: #eb6834; --neighbor-soft: rgba(235,104,52,0.12);
+  --tokmark-bg: rgba(22,163,74,0.16); --tokmark-line: #16a34a;
+  --bar-track: #edeff4;
+  --shadow: 0 1px 3px rgba(16,18,24,0.07), 0 4px 16px rgba(16,18,24,0.05);
+  --ramp-0: #9ec5f4; --ramp-1: #5598e7; --ramp-2: #2a78d6; --ramp-3: #1c5cab; --ramp-4: #0d366b;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--plane); color: var(--ink);
+  font: 13.5px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible,
+tr[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* ---------- top bar ---------- */
+header {
+  display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 52px;
+  background: var(--surface); border-bottom: 1px solid var(--hairline); flex: none; z-index: 30;
+}
+.brand { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.brand b { font-size: 15px; letter-spacing: -0.01em; }
+.brand span { color: var(--muted); font-size: 11.5px; }
+select#dictSel {
+  background: var(--surface-2); color: var(--ink); border: 1px solid var(--hairline);
+  border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 12.5px; max-width: 270px;
+}
+nav.tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
+nav.tabs button {
+  padding: 5px 13px; border-radius: 7px; color: var(--ink-2); font-size: 12.5px; font-weight: 500;
+}
+nav.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.spacer { flex: 1; }
+.searchbox { position: relative; }
+.searchbox input {
+  width: 250px; padding: 6px 10px 6px 28px; border: 1px solid var(--hairline); border-radius: 8px;
+  background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12.5px;
+}
+.searchbox svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+#searchResults {
+  position: absolute; top: calc(100% + 6px); right: 0; width: 420px; max-height: 60vh; overflow: auto;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px;
+  box-shadow: var(--shadow); display: none; z-index: 40;
+}
+#searchResults .sr {
+  display: block; width: 100%; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+}
+#searchResults .sr:last-child { border-bottom: none; }
+#searchResults .sr:hover, #searchResults .sr.active { background: var(--accent-soft); }
+#searchResults .sr .sr-id { font-weight: 600; font-size: 12px; }
+#searchResults .sr .sr-ctx { color: var(--ink-2); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconbtn {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--ink-2);
+  border: 1px solid var(--hairline); background: var(--surface);
+}
+.iconbtn:hover { background: var(--surface-2); }
+
+/* ---------- layout ---------- */
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view { flex: 1; min-height: 0; display: none; }
+.view.active { display: flex; }
+.viz-split { flex-direction: row; }
+.viz-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.viz-controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 14px; border-bottom: 1px solid var(--hairline); background: var(--surface);
+}
+.seg { display: flex; background: var(--surface-2); border-radius: 7px; padding: 2px; }
+.seg button { padding: 3px 10px; border-radius: 5px; font-size: 12px; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.ctl-label { font-size: 11.5px; color: var(--muted); }
+label.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+label.switch input { accent-color: var(--accent); }
+.legend { display: flex; align-items: center; gap: 7px; margin-left: auto; font-size: 11.5px; color: var(--ink-2); }
+.legend .ramp {
+  width: 90px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--ramp-0), var(--ramp-1), var(--ramp-2), var(--ramp-3), var(--ramp-4));
+}
+.legend .key-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+canvas.viz { flex: 1; min-height: 0; width: 100%; touch-action: none; cursor: grab; display: block; }
+canvas.viz.dragging { cursor: grabbing; }
+.hint {
+  position: absolute; bottom: 10px; left: 14px; font-size: 11px; color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 82%, transparent); padding: 3px 8px; border-radius: 6px;
+  pointer-events: none;
+}
+#tooltip {
+  position: fixed; z-index: 50; pointer-events: none; display: none; max-width: 340px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 9px;
+  box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px;
+}
+#tooltip .tt-id { font-weight: 600; }
+#tooltip .tt-lens { color: var(--accent); font-size: 11.5px; margin-top: 2px; }
+#tooltip .tt-jlens { color: var(--tokmark-line); font-size: 11.5px; margin-top: 2px; }
+#tooltip .tt-txt { color: var(--ink-2); font-size: 11px; margin-top: 3px; }
+
+aside.panel {
+  width: 372px; flex: none; overflow-y: auto; background: var(--surface);
+  border-left: 1px solid var(--hairline); padding: 14px;
+}
+
+/* ---------- cards & shared ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 11px;
+  padding: 13px 15px; margin-bottom: 12px;
+}
+aside .card { background: var(--surface-2); border-color: transparent; }
+.card h3 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.card h3 .h3-note { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; white-space: pre;
+}
+.chip.dim { background: var(--surface-2); color: var(--ink-2); }
+.chip.jl { background: var(--tokmark-bg); color: var(--tokmark-line); }
+.chip.jl.dim { opacity: 0.72; }
+.vb-row { display: grid; grid-template-columns: 138px 1fr 76px; align-items: center; gap: 8px; padding: 3px 0; font-size: 11.5px; }
+.vb-row .vb-label { color: var(--ink-2); }
+.vb-row .vb-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 11px; }
+.vb-row .vb-val .vb-sub { color: var(--muted); font-size: 10px; }
+.vb-row .minibar { max-width: none; height: 5px; }
+.vb-row .minibar i.jl { background: var(--tokmark-line); }
+.prompt-row { padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+.prompt-row:last-child { border-bottom: none; }
+.prompt-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-size: 11px; color: var(--muted); }
+.prompt-meta .d-val { font-variant-numeric: tabular-nums; }
+.minibar { flex: 1; max-width: 110px; height: 4px; border-radius: 2px; background: var(--bar-track); overflow: hidden; }
+.minibar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.prompt-text {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.55;
+  color: var(--ink-2); white-space: pre-wrap; word-break: break-word;
+}
+.prompt-text mark {
+  background: var(--tokmark-bg); color: var(--ink); border-bottom: 2px solid var(--tokmark-line);
+  border-radius: 2px; padding: 0 1px; font-weight: 600;
+}
+.pos-badge {
+  font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--surface-2);
+  color: var(--muted); border: 1px solid var(--hairline);
+}
+.linkbtn { color: var(--accent); font-size: 12px; font-weight: 500; padding: 0; }
+.linkbtn:hover { text-decoration: underline; }
+
+/* ---------- region page ---------- */
+#view-region { overflow-y: auto; display: none; }
+#view-region.active { display: block; }
+.region-wrap { max-width: 1060px; margin: 0 auto; padding: 20px 22px 60px; }
+.region-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.region-head h1 { margin: 0; font-size: 21px; letter-spacing: -0.01em; }
+.region-head .crumb { color: var(--muted); font-size: 12px; }
+.nav-arrows { margin-left: auto; display: flex; gap: 6px; }
+.nav-arrows button {
+  border: 1px solid var(--hairline); background: var(--surface); border-radius: 7px;
+  padding: 4px 11px; font-size: 12.5px; color: var(--ink-2);
+}
+.nav-arrows button:hover { background: var(--surface-2); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin: 14px 0; }
+.tile { background: var(--surface); border: 1px solid var(--hairline); border-radius: 11px; padding: 10px 13px; }
+.tile .t-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile .t-value { font-size: 19px; font-weight: 600; margin-top: 2px; }
+.tile .t-sub { font-size: 11px; color: var(--ink-2); }
+.region-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 900px) { .region-grid { grid-template-columns: 1fr; } aside.panel { display: none; } }
+.lens-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lens-cols .col-h { font-size: 11px; color: var(--ink-2); margin-bottom: 5px; }
+.nb-row { display: flex; align-items: center; gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--hairline); }
+.nb-row:last-child { border-bottom: none; }
+.nb-row .nb-id { font-weight: 600; font-size: 12px; min-width: 46px; }
+.nb-row .nb-lens { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--ink-2); }
+.nb-row .nb-cos { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--ink-2); width: 44px; text-align: right; }
+.nb-row .minibar { max-width: 70px; }
+.nb-row .minibar i { background: var(--neighbor); }
+.nb-row.nb-head { border-bottom: none; padding: 0 0 2px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.nb-row.nb-head .nb-cos { width: 44px; }
+#nbMap { width: 100%; border-radius: 9px; background: var(--surface-2); }
+.map-caption { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+/* ---------- member-scan panel ---------- */
+.card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.card-head h3 { margin: 0; flex: none; }
+.card-head .seg { margin-left: auto; }
+.card-head .seg button { font-size: 11.5px; padding: 3px 9px; }
+.ms-note {
+  font-size: 11.5px; color: var(--ink-2); line-height: 1.55; margin: 6px 0 2px;
+  padding: 7px 10px; border-radius: 8px; background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+}
+.ms-note.warn { border-left-color: var(--neighbor); }
+/* modifier on the projection mode; sits after the segmented control, which has
+   already taken the auto margin, so it needs none of its own */
+.ms-toggle {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  font-size: 11.5px; color: var(--ink-2); cursor: pointer; user-select: none;
+}
+.ms-toggle input { margin: 0; cursor: pointer; accent-color: var(--accent); }
+/* stronger than .ms-note.warn: this one says the list itself is unreliable */
+.seed-warn {
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-2);
+  border: 1px solid var(--neighbor); border-radius: 6px;
+  padding: 7px 9px; margin: 6px 0 2px;
+  background: color-mix(in srgb, var(--neighbor) 8%, transparent);
+}
+.seed-warn b { color: var(--ink); }
+
+/* ---------- cell shell ---------- */
+#shellMap { width: 100%; border-radius: 9px; background: var(--surface-2); }
+.shell-stats {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px;
+  color: var(--muted); font-variant-numeric: tabular-nums; margin: 8px 0 2px;
+}
+.shell-stats b { color: var(--ink-2); font-weight: 600; }
+.shell-key { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.shell-key span { display: inline-flex; align-items: center; gap: 5px; }
+.shell-key i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.shell-key i.near { background: var(--accent); }
+.shell-key i.hot { background: var(--neighbor); }
+/* band separators inside the radius-ordered random sample */
+.ms-band {
+  display: flex; align-items: center; gap: 8px; margin: 10px 0 2px;
+  font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.ms-band::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.ms-band b { color: var(--ink-2); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.ms-dist {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; margin: 8px 0 2px;
+}
+.ms-dist b { color: var(--ink-2); font-weight: 600; }
+.ms-row { padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+.ms-row:last-child { border-bottom: none; }
+.ms-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-size: 11px; color: var(--muted); }
+.ms-rank { color: var(--muted); font-size: 10.5px; min-width: 20px; font-variant-numeric: tabular-nums; }
+.ms-primary { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.ms-second { font-variant-numeric: tabular-nums; }
+.ms-foreign {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px; cursor: pointer;
+  background: var(--neighbor-soft); color: var(--neighbor); border: none; font-weight: 600;
+}
+.ms-empty { font-size: 12px; color: var(--muted); padding: 10px 0; }
+
+/* ---------- table ---------- */
+#view-table { flex-direction: column; }
+.table-scroller { flex: 1; overflow: auto; }
+table.regions { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.regions th {
+  position: sticky; top: 0; background: var(--surface); z-index: 5; text-align: left;
+  padding: 8px 12px; border-bottom: 1px solid var(--hairline); font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; user-select: none;
+}
+table.regions th .arrow { color: var(--accent); }
+table.regions td { padding: 7px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+table.regions tbody tr { cursor: pointer; }
+table.regions tbody tr:hover { background: var(--accent-soft); }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+td .cell-lens { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--accent); }
+td .cell-lens.jl { color: var(--tokmark-line); }
+td .cell-snip { color: var(--ink-2); font-size: 11.5px; display: block; max-width: 460px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- footer / modal ---------- */
+footer {
+  flex: none; display: flex; gap: 18px; align-items: center; padding: 5px 16px;
+  border-top: 1px solid var(--hairline); background: var(--surface);
+  font-size: 11.5px; color: var(--ink-2); overflow-x: auto; white-space: nowrap;
+}
+footer b { color: var(--ink); font-weight: 600; }
+#aboutModal {
+  position: fixed; inset: 0; z-index: 100; display: none; place-items: center;
+  background: rgba(10,12,16,0.45);
+}
+#aboutModal.open { display: grid; }
+.modal-card {
+  width: min(660px, calc(100vw - 40px)); max-height: 82vh; overflow-y: auto;
+  background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 22px 26px;
+}
+.modal-card h2 { margin: 0 0 10px; font-size: 17px; }
+.modal-card h4 { margin: 16px 0 4px; font-size: 13px; }
+.modal-card p { margin: 6px 0; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.modal-card .close { float: right; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- testing (flat, tool-style) ---------- */
+#view-testing.active { display: flex; flex-direction: column; }
+.test-subnav { display: flex; align-items: center; gap: 14px; padding: 7px 14px; border-bottom: 1px solid var(--hairline); background: var(--surface); flex-wrap: wrap; }
+.test-subnav .seg button { font-size: 12px; }
+.test-tools { display: flex; align-items: center; gap: 8px; }
+.test-tools .ctl-label { font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.test-body { flex: 1; min-height: 0; overflow: hidden; display: flex; }
+.test-split { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) 340px; }
+.test-viz { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.test-viz canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.test-viz canvas.dragging { cursor: grabbing; }
+.test-legend { position: absolute; left: 12px; top: 10px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--hairline); border-radius: 5px; padding: 7px 9px; font-size: 10.5px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.test-legend .lg-ramp { width: 116px; height: 7px; border-radius: 2px; background: linear-gradient(90deg, var(--ramp-0), var(--ramp-4)); }
+.test-legend .lg-row { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.test-legend .lg-ring { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); }
+.test-legend .lg-ring.null { border-color: var(--muted); }
+.test-hint { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 10.5px; color: var(--muted); padding: 4px; pointer-events: none; background: linear-gradient(to top, var(--surface), transparent); }
+/* right panel — flat, hairline-sectioned, no filled card */
+.test-panel { border-left: 1px solid var(--hairline); min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 0; background: var(--surface); }
+.tpad { padding: 12px 14px; border-bottom: 1px solid var(--hairline); }
+.tpad:last-child { border-bottom: 0; }
+.tp-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }
+.tp-tag { font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; font-weight: 650; border: 1px solid transparent; }
+.tp-tag.refusal { background: var(--accent-soft); color: var(--accent); }
+.tp-tag.null { background: var(--surface-2); color: var(--muted); border-color: var(--hairline); }
+.tp-title { font-size: 13.5px; font-weight: 650; margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+.tp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--hairline); border-radius: 5px; overflow: hidden; }
+.tp-stat { padding: 6px 9px; border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+.tp-stat:nth-child(2n) { border-right: 0; }
+.tp-stat:nth-last-child(-n+2) { border-bottom: 0; }
+.tp-stat .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.tp-stat .v { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tp-sec { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 7px; }
+.tp-prompt { font-size: 11px; line-height: 1.4; color: var(--ink-2); padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 4px; margin-bottom: 4px; }
+.tp-prompt .d { float: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10px; margin-left: 8px; }
+.nbrow { display: grid; grid-template-columns: 34px 1fr 42px; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; cursor: pointer; font-size: 11.5px; }
+.nbrow:hover { background: var(--accent-soft); }
+.nbrow .nid { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.nbrow .barwrap { height: 5px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.nbrow .bar { height: 100%; background: var(--neighbor); }
+.nbrow .cos { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 10.5px; text-align: right; }
+.tp-empty { color: var(--muted); font-size: 12px; padding: 26px 14px; text-align: center; line-height: 1.5; }
+/* Δ bars */
+.abar-row { display: grid; grid-template-columns: 108px 1fr 52px; align-items: center; gap: 8px; margin: 3px 0; font-size: 11.5px; }
+.abar-label { color: var(--ink-2); text-align: right; }
+.abar-label b { color: var(--ink); font-weight: 600; }
+.abar-track { position: relative; height: 15px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.abar-fill { position: absolute; left: 0; top: 0; bottom: 0; }
+.abar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 11px; }
+.abar-val .dlt { display: block; font-size: 9.5px; color: var(--muted); }
+.abar-val .dlt.neg { color: var(--accent); }
+/* concept AUROC table + list + detector */
+.auroc-tbl { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+.auroc-tbl th, .auroc-tbl td { padding: 5px 9px; text-align: right; border-bottom: 1px solid var(--hairline); font-variant-numeric: tabular-nums; }
+.auroc-tbl tr:last-child td { border-bottom: 0; }
+.auroc-tbl th { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+.auroc-tbl th:first-child, .auroc-tbl td:first-child { text-align: left; }
+.auroc-tbl td.win { color: var(--accent); font-weight: 700; }
+.auroc-tbl td.win::after { content: " \25C4"; font-size: 8px; }
+.csearch { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 4px; background: var(--surface-2); color: var(--ink); margin-bottom: 6px; }
+.clist { display: flex; flex-direction: column; max-height: 230px; overflow-y: auto; }
+.crow { display: grid; grid-template-columns: 1fr 40px; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 11.5px; }
+.crow:hover { background: var(--accent-soft); }
+.crow.active { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.crow .clab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crow .cauc { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-2); }
+.detout { display: flex; flex-direction: column; gap: 3px; }
+.detrow { display: grid; grid-template-columns: 16px 1fr 40px; gap: 7px; align-items: center; font-size: 11px; }
+.detrow .yd { width: 14px; height: 14px; border-radius: 3px; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #fff; }
+.detrow .yd.pos { background: var(--accent); }
+.detrow .yd.neg { background: var(--muted); }
+.detrow .dtxt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
+.detrow .dsc { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-2); }
+.test-note-inline { font-size: 11px; color: var(--muted); line-height: 1.5; padding: 7px 9px; border: 1px solid var(--hairline); border-left: 2px solid var(--warn, #d98a26); border-radius: 3px; }
+@media (max-width: 820px) { .test-split { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .test-panel { border-left: 0; border-top: 1px solid var(--hairline); max-height: 46%; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>EP Explorer</b><span>exemplar partitioning</span></div>
+  <select id="dictSel" aria-label="Dictionary"></select>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-mode="atlas" aria-selected="true">Atlas</button>
+    <button role="tab" data-mode="sphere" aria-selected="false">Sphere</button>
+    <button role="tab" data-mode="region" aria-selected="false">Region</button>
+    <button role="tab" data-mode="table" aria-selected="false">Table</button>
+    <button role="tab" data-mode="testing" aria-selected="false">Testing</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="searchbox">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="searchInput" type="search" placeholder="Search tokens &amp; prompts…" autocomplete="off">
+    <div id="searchResults"></div>
+  </div>
+  <button class="iconbtn" id="aboutBtn" title="What am I looking at?" aria-label="About">?</button>
+  <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+</header>
+
+<main>
+  <!-- ATLAS -->
+  <section class="view viz-split active" id="view-atlas">
+    <div class="viz-main">
+      <div class="viz-controls">
+        <span class="ctl-label">Layout</span>
+        <div class="seg" id="layoutSeg">
+          <button data-layout="tsne" aria-pressed="true">t-SNE</button>
+          <button data-layout="pca" aria-pressed="false">PCA</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="atlasLabels"> labels</label>
+        <span class="ctl-label" id="colorLbl">Colour</span>
+        <div class="seg" id="colorSeg">
+          <button data-color="n" aria-pressed="true">members</button>
+          <button data-color="jv" aria-pressed="false">verbalizability</button>
+        </div>
+        <span class="ctl-label" style="margin-left:6px">
+          <span class="key-dot" style="background:var(--accent);display:inline-block;width:9px;height:9px;border-radius:50%"></span> selected
+          &nbsp;<span class="key-dot" style="background:var(--neighbor);display:inline-block;width:9px;height:9px;border-radius:50%"></span> its true k-NN
+        </span>
+        <div class="legend"><span class="ramp-name">members</span><span id="rampLo"></span><span class="ramp"></span><span id="rampHi"></span></div>
+      </div>
+      <canvas class="viz" id="atlasCanvas"></canvas>
+      <div class="hint">drag to pan · scroll to zoom · click a region — 2D layout is approximate; panel cosines are exact</div>
+    </div>
+    <aside class="panel" id="atlasPanel"></aside>
+  </section>
+
+  <!-- SPHERE -->
+  <section class="view viz-split" id="view-sphere">
+    <div class="viz-main">
+      <div class="viz-controls">
+        <label class="switch"><input type="checkbox" id="sphereEdges" checked> Voronoi cells</label>
+        <label class="switch"><input type="checkbox" id="sphereLabels"> labels</label>
+        <span class="ctl-label" id="sphereNote"></span>
+        <div class="legend"><span class="ramp-name">members</span><span class="ramp"></span></div>
+      </div>
+      <canvas class="viz" id="sphereCanvas"></canvas>
+      <div class="hint">drag to rotate · scroll to zoom — PCA→3D keeps 3 of ~2000 dimensions; treat as a map, not a metric</div>
+    </div>
+    <aside class="panel" id="spherePanel"></aside>
+  </section>
+
+  <!-- REGION -->
+  <section class="view" id="view-region"><div class="region-wrap" id="regionPage"></div></section>
+
+  <!-- TABLE -->
+  <section class="view" id="view-table">
+    <div class="table-scroller" id="tableScroller">
+      <table class="regions">
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TESTING -->
+  <section class="view" id="view-testing">
+    <div class="test-subnav">
+      <div class="seg" id="testSeg">
+        <button data-test="refusal" aria-pressed="true">Refusal ablation</button>
+        <button data-test="concept" aria-pressed="false">Concept detection</button>
+      </div>
+      <div class="test-tools" id="testTools"></div>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="testInfo" title="About this test" aria-label="About this test">i</button>
+    </div>
+    <div class="test-body" id="testBody"></div>
+  </section>
+</main>
+
+<footer id="statusBar"></footer>
+<div id="tooltip"></div>
+
+<div id="aboutModal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="close iconbtn" id="aboutClose" aria-label="Close">✕</button>
+    <h2>What is an EP dictionary?</h2>
+    <p><b>Exemplar Partitioning</b> tiles a model's residual-stream activation space into Voronoi
+    cells, each anchored by a <b>real observed activation</b> — the <i>exemplar</i>. No training:
+    activations are centered, unit-normalized, and leader-clustered with a cosine-distance
+    threshold θ set from a percentile of pairwise distances.</p>
+    <h4>Every dot = one region; every member = one token</h4>
+    <p>Activations are harvested at <b>every token position</b> of every prompt (skipping
+    position 0). A region's members are token activations, not whole prompts — the highlighted
+    token in each excerpt is the exact token whose layer-L activation fell in the region, and
+    the top excerpt at distance 0.000 is the exemplar itself.</p>
+    <h4>Reading the numbers</h4>
+    <p><b>d</b> = cosine distance to the exemplar (members satisfy d ≤ θ). <b>Coherence</b> ∈ [0,1]
+    = how tightly member directions agree. <b>Logit lens</b> = the exemplar direction pushed
+    through the final norm + unembedding: the vocabulary this direction points toward.
+    By construction <b>no two exemplars are closer than θ</b>.</p>
+    <h4>J-lens and verbalizability</h4>
+    <p>The <b>logit lens</b> unembeds a direction directly — it asks what the direction looks
+    like in vocabulary space <i>at its own layer</i>, which can mislead at mid-stack.
+    The <b>Jacobian lens</b> (Anthropic's jlens) first transports the direction to the final
+    layer through <span class="mono">J&#772;<sub>l</sub></span>, the corpus-averaged Jacobian
+    ∂h<sub>final</sub>/∂h<sub>l</sub>, then unembeds — what the activation is
+    <i>disposed to make the model say</i>. Per region we also store how concentrated the
+    J-lens distribution is: <b>verbalizability = 1 − H/ln|V|</b> (entropy of the softmax at
+    RMS-1 scale) plus the top-8 probability mass. High = a genuinely verbalizable concept
+    region; low = a mechanical region whose token labels shouldn't be trusted, even if they
+    look confident. Lenses are available for Qwen3.5-4B (instruct) and Qwen3.5-2B-Base;
+    no public lens exists for Qwen3.5-4B-Base or the Gemma dictionary's mirror.</p>
+    <h4>Trusting the pictures</h4>
+    <p>The Atlas (t-SNE / PCA) and Sphere (PCA→3D) compress ~2000 dimensions where exemplars are
+    nearly orthogonal — positions and gap sizes are navigation aids only. Exact geometry lives in
+    the numbers: neighbor cosines, d values, and θ are computed in the full space.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+const DATA = __DATA__;
+
+/* ------------------------------------------------ state & helpers */
+const $ = (s) => document.querySelector(s);
+const state = { dict: 0, mode: "atlas", sel: -1, layout: "tsne", colorBy: "n", testMode: "refusal", testLayout: "pca",
+  // `random` is the only mode not anchored on the first-arrival exemplar, so it
+  // is the one that describes the region rather than the seeding accident.
+  msMode: "random", msAll: false, nbExact: true };
+const fmt = (n) => n.toLocaleString("en-US");
+const cur = () => DATA.dicts[state.dict];
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let hoverIdx = -1;
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function hexToRgb(h) {
+  const v = parseInt(h.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+let rampStops = [];
+function refreshRamp() {
+  rampStops = [0, 1, 2, 3, 4].map((i) => hexToRgb(cssVar("--ramp-" + i)));
+}
+function rampColor(t) {
+  t = Math.max(0, Math.min(1, t)) * (rampStops.length - 1);
+  const i = Math.min(rampStops.length - 2, Math.floor(t)), f = t - i;
+  const a = rampStops[i], b = rampStops[i + 1];
+  return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
+}
+
+/* per-dict derived data */
+const derived = DATA.dicts.map((d) => {
+  const logs = d.regions.map((r) => Math.log10(r.n));
+  const lo = Math.min(...logs), hi = Math.max(...logs);
+  let jvT = null;
+  if (d.jlens) {
+    const jvs = d.regions.map((r) => r.jv);
+    const jlo = Math.min(...jvs), jhi = Math.max(...jvs);
+    jvT = d.regions.map((r) => (jhi > jlo ? (r.jv - jlo) / (jhi - jlo) : 0.5));
+  }
+  return {
+    sizeT: d.regions.map((r) => (hi > lo ? (Math.log10(r.n) - lo) / (hi - lo) : 0.5)),
+    jvT,
+    radius: d.regions.map((r) => Math.max(2.4, Math.min(9, 1.7 + Math.sqrt(r.n) * 0.055))),
+    searchIdx: d.regions.map((r) =>
+      (r.lens.join(" ") + " " + r.lensM.join(" ") + " " +
+       (r.jl ? r.jl.join(" ") + " " + r.jlM.join(" ") + " " : "") +
+       (r.label || "") + " " +
+       r.sm.slice(0, 3).map((s) => s.t).join(" ")).toLowerCase()),
+    topByN: d.regions.map((r, i) => i).sort((a, b) => d.regions[b].n - d.regions[a].n),
+  };
+});
+
+function tokPreview(toks, k = 3) {
+  return (toks || []).slice(0, k).map((t) => JSON.stringify(t).slice(1, -1)).join("  ");
+}
+function lensPreview(r, k = 3) { return tokPreview(r.lens, k); }
+/* colour value for a dot: region size (log) or J-lens verbalizability */
+function dotVal(der, i) {
+  return state.colorBy === "jv" && der.jvT ? der.jvT[i] : der.sizeT[i];
+}
+
+/* ------------------------------------------------ hash routing */
+function applyHash() {
+  const parts = location.hash.slice(1).split("/");
+  const di = DATA.dicts.findIndex((d) => d.key === parts[0]);
+  if (di >= 0) state.dict = di;
+  if (["atlas", "sphere", "region", "table", "testing"].includes(parts[1])) state.mode = parts[1];
+  if (state.mode === "testing") {
+    if (["refusal", "concept"].includes(parts[2])) state.testMode = parts[2];
+  } else {
+    const r = parseInt(parts[2]);
+    state.sel = Number.isFinite(r) && r >= 0 && r < cur().regions.length ? r : state.sel;
+  }
+}
+function pushHash() {
+  const tail = state.mode === "testing" ? `/${state.testMode}`
+    : (state.sel >= 0 ? `/${state.sel}` : "");
+  const h = `#${cur().key}/${state.mode}` + tail;
+  if (location.hash !== h) history.replaceState(null, "", h);
+}
+
+/* ------------------------------------------------ DOM builders */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function promptTextEl(s) {
+  const p = el("div", "prompt-text");
+  if (s.a >= 0 && s.b > s.a && s.b <= s.t.length) {
+    p.append(document.createTextNode(s.t.slice(0, s.a)));
+    const m = el("mark", null, s.t.slice(s.a, s.b));
+    p.append(m, document.createTextNode(s.t.slice(s.b)));
+  } else {
+    p.textContent = s.t;
+  }
+  return p;
+}
+function promptRow(s, threshold) {
+  const row = el("div", "prompt-row");
+  const meta = el("div", "prompt-meta");
+  meta.append(el("span", "d-val", "d = " + s.d.toFixed(3)));
+  const bar = el("div", "minibar"); const fill = el("i");
+  fill.style.width = Math.min(100, (s.d / threshold) * 100) + "%";
+  bar.append(fill);
+  meta.append(bar, el("span", "pos-badge", "pos " + s.pos));
+  row.append(meta, promptTextEl(s));
+  return row;
+}
+function chipRow(tokens, cls) {
+  const c = el("div", "chips");
+  tokens.forEach((t) => c.append(el("span", "chip" + (cls ? " " + cls : ""),
+    t.replace(/\n/g, "\\n"))));
+  return c;
+}
+
+/* ------------------------------------------------ side panel */
+function renderPanel(target) {
+  const d = cur(); target.textContent = "";
+  if (state.sel < 0) {
+    const c = el("div", "card");
+    c.append(el("h3", null, d.model + " · layer " + d.layer + " · p=" + d.p));
+    const stats = [
+      ["Regions", fmt(d.K)], ["Activations", fmt(d.nActs)],
+      ["Threshold θ", d.threshold.toFixed(3)], ["Largest region", fmt(d.largest)],
+      ["Singletons", fmt(d.singletons)], ["Corpus", d.corpus + " · ctx " + d.ctx],
+    ];
+    stats.forEach(([k, v]) => {
+      const row = el("div"); row.style.cssText = "display:flex;justify-content:space-between;padding:3px 0;font-size:12.5px";
+      row.append(el("span", null, k), Object.assign(el("b", null, v), { style: "font-variant-numeric:tabular-nums" }));
+      c.append(row);
+    });
+    target.append(c);
+    const tip = el("div", "card");
+    tip.append(el("h3", null, "Get started"));
+    const p = el("div", null, "Click any dot to inspect its region: exemplar token, logit-lens decode, nearest members and true nearest neighbors.");
+    p.style.cssText = "font-size:12.5px;color:var(--ink-2);line-height:1.55";
+    tip.append(p); target.append(tip);
+    return;
+  }
+  const r = d.regions[state.sel];
+  const head = el("div", "card");
+  const h = el("div"); h.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:6px";
+  h.append(Object.assign(el("b", null, "Region #" + r.i), { style: "font-size:15px" }),
+           el("span", "pos-badge", fmt(r.n) + " members"));
+  head.append(h);
+  head.append(el("h3", null, "Logit lens · exemplar dir"));
+  head.append(chipRow(r.lens.slice(0, 6)));
+  if (r.jl) {
+    const jh = el("h3", null, "J-lens · exemplar dir");
+    jh.style.marginTop = "10px";
+    head.append(jh, chipRow(r.jl.slice(0, 6), "jl"));
+    const v = el("div", null, "verbalizability " + r.jv.toFixed(2) +
+      " · top-8 mass " + (r.jm * 100).toFixed(0) + "%");
+    v.style.cssText = "font-size:11px;color:var(--muted);margin-top:5px";
+    head.append(v);
+  }
+  const open = el("button", "linkbtn", "Open full region page →");
+  open.style.marginTop = "9px";
+  open.onclick = () => { setMode("region"); };
+  head.append(open);
+  target.append(head);
+
+  const ex = el("div", "card");
+  ex.append(el("h3", null, "Exemplar — the anchoring activation"));
+  if (r.sm.length) ex.append(promptRow(r.sm[0], d.threshold));
+  target.append(ex);
+
+  if (r.sm.length > 1) {
+    const mem = el("div", "card");
+    mem.append(el("h3", null, "Nearest members"));
+    r.sm.slice(1, 4).forEach((s) => mem.append(promptRow(s, d.threshold)));
+    target.append(mem);
+  }
+
+  const nb = el("div", "card");
+  nb.append(el("h3", null, "Nearest regions (exact cosine)"));
+  r.nb.slice(0, 6).forEach(([j, cos]) => {
+    const row = el("div", "nb-row");
+    const btn = el("button", "linkbtn nb-id", "#" + j);
+    btn.onclick = () => selectRegion(j);
+    row.append(btn, el("span", "nb-lens", lensPreview(d.regions[j])));
+    const bar = el("div", "minibar"); const fill = el("i");
+    fill.style.width = Math.max(2, cos * 100) + "%"; bar.append(fill);
+    row.append(bar, el("span", "nb-cos", cos.toFixed(2)));
+    nb.append(row);
+  });
+  target.append(nb);
+}
+
+/* ------------------------------------------------ atlas (2D canvas) */
+const atlas = {
+  canvas: $("#atlasCanvas"), view: { x: 0, y: 0, k: 1 }, fitted: false,
+  pts() { const d = cur(); return d.regions.map((r) => state.layout === "tsne" ? r.xy : r.pca); },
+};
+function atlasFit() {
+  const pts = atlas.pts();
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  pts.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+  const W = atlas.canvas.clientWidth, H = atlas.canvas.clientHeight;
+  const k = 0.92 * Math.min(W / Math.max(1e-6, x1 - x0), H / Math.max(1e-6, y1 - y0));
+  atlas.view = { k, x: W / 2 - k * (x0 + x1) / 2, y: H / 2 - k * (y0 + y1) / 2 };
+  atlas.fitted = true;
+}
+function atlasToScreen(p) { return [p[0] * atlas.view.k + atlas.view.x, p[1] * atlas.view.k + atlas.view.y]; }
+
+function drawAtlas() {
+  const cv = atlas.canvas, d = cur(), der = derived[state.dict];
+  const dpr = devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (!W) return;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  if (!atlas.fitted) atlasFit();
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = cssVar("--plane"); ctx.fillRect(0, 0, W, H);
+
+  const pts = atlas.pts();
+  const neighborSet = new Set(state.sel >= 0 ? d.regions[state.sel].nb.map((n) => n[0]) : []);
+
+  // dots
+  for (let i = 0; i < pts.length; i++) {
+    if (i === state.sel) continue;
+    const [sx, sy] = atlasToScreen(pts[i]);
+    if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
+    const r = der.radius[i];
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832);
+    ctx.fillStyle = rampColor(dotVal(der, i)); ctx.globalAlpha = 0.88; ctx.fill(); ctx.globalAlpha = 1;
+    if (neighborSet.has(i)) { ctx.lineWidth = 2; ctx.strokeStyle = cssVar("--neighbor"); ctx.stroke(); }
+    else if (i === hoverIdx) { ctx.lineWidth = 1.5; ctx.strokeStyle = cssVar("--ink-2"); ctx.stroke(); }
+  }
+  // selected on top
+  if (state.sel >= 0) {
+    const [sx, sy] = atlasToScreen(pts[state.sel]);
+    const r = der.radius[state.sel] + 1.5;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832);
+    ctx.fillStyle = rampColor(dotVal(der, state.sel)); ctx.fill();
+    ctx.lineWidth = 2.6; ctx.strokeStyle = cssVar("--accent"); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx, sy, r + 4, 0, 6.2832);
+    ctx.lineWidth = 1; ctx.strokeStyle = cssVar("--accent"); ctx.globalAlpha = 0.4; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  // labels for largest regions
+  if ($("#atlasLabels").checked) {
+    ctx.font = "10.5px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center";
+    const surface = cssVar("--plane"), ink = cssVar("--ink-2");
+    derived[state.dict].topByN.slice(0, 30).forEach((i) => {
+      const [sx, sy] = atlasToScreen(pts[i]);
+      if (sx < 0 || sy < 0 || sx > W || sy > H) return;
+      const label = JSON.stringify(d.regions[i].lens[0] || "").slice(1, -1).trim() || "·";
+      ctx.lineWidth = 3; ctx.strokeStyle = surface;
+      ctx.strokeText(label, sx, sy - der.radius[i] - 4);
+      ctx.fillStyle = ink; ctx.fillText(label, sx, sy - der.radius[i] - 4);
+    });
+  }
+}
+
+function atlasPick(mx, my) {
+  const pts = atlas.pts(), der = derived[state.dict];
+  let best = -1, bestD = 1e9;
+  for (let i = 0; i < pts.length; i++) {
+    const [sx, sy] = atlasToScreen(pts[i]);
+    const dd = (sx - mx) ** 2 + (sy - my) ** 2;
+    const hit = Math.max(8, der.radius[i] + 3);
+    if (dd < hit * hit && dd < bestD) { bestD = dd; best = i; }
+  }
+  return best;
+}
+
+/* ------------------------------------------------ sphere (3D canvas) */
+const sphere = { canvas: $("#sphereCanvas"), yaw: 0.6, pitch: -0.35, zoom: 1, spin: !reducedMotion };
+function sphereProject(p, W, H) {
+  const cy = Math.cos(sphere.yaw), sy = Math.sin(sphere.yaw);
+  const cp = Math.cos(sphere.pitch), sp = Math.sin(sphere.pitch);
+  const x1 = p[0] * cy + p[2] * sy, z1 = -p[0] * sy + p[2] * cy;
+  const y2 = p[1] * cp - z1 * sp, z2 = p[1] * sp + z1 * cp;
+  const s = Math.min(W, H) * 0.42 * sphere.zoom;
+  return [W / 2 + x1 * s, H / 2 - y2 * s, z2];
+}
+function drawSphere() {
+  const cv = sphere.canvas, d = cur(), der = derived[state.dict];
+  const dpr = devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (!W) return;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = cssVar("--plane"); ctx.fillRect(0, 0, W, H);
+
+  // sphere outline
+  ctx.beginPath();
+  ctx.arc(W / 2, H / 2, Math.min(W, H) * 0.42 * sphere.zoom, 0, 6.2832);
+  ctx.strokeStyle = cssVar("--hairline"); ctx.lineWidth = 1; ctx.stroke();
+
+  const hairline = cssVar("--hairline"), ink2 = cssVar("--ink-2");
+  if ($("#sphereEdges").checked && d.edges.length) {
+    ctx.lineWidth = 1;
+    for (const e of d.edges) {
+      ctx.beginPath();
+      let zsum = 0, npts = 0;
+      for (let i = 0; i < e.length; i += 3) {
+        const [sx, syy, z] = sphereProject([e[i], e[i + 1], e[i + 2]], W, H);
+        zsum += z; npts++;
+        if (i === 0) ctx.moveTo(sx, syy); else ctx.lineTo(sx, syy);
+      }
+      const front = zsum / npts > 0;
+      ctx.globalAlpha = front ? 0.55 : 0.12;
+      ctx.strokeStyle = front ? ink2 : hairline;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const pts = d.regions.map((r) => sphereProject(r.s, W, H));
+  const order = pts.map((_, i) => i).sort((a, b) => pts[a][2] - pts[b][2]);
+  const neighborSet = new Set(state.sel >= 0 ? d.regions[state.sel].nb.map((n) => n[0]) : []);
+  for (const i of order) {
+    const [sx, syy, z] = pts[i];
+    const scale = 0.62 + 0.38 * (z + 1) / 2;
+    const r = der.radius[i] * 0.85 * scale;
+    ctx.beginPath(); ctx.arc(sx, syy, r, 0, 6.2832);
+    ctx.globalAlpha = z > 0 ? 0.95 : 0.35;
+    ctx.fillStyle = rampColor(dotVal(der, i)); ctx.fill();
+    if (i === state.sel) { ctx.lineWidth = 2.6; ctx.strokeStyle = cssVar("--accent"); ctx.stroke(); }
+    else if (neighborSet.has(i)) { ctx.lineWidth = 1.8; ctx.strokeStyle = cssVar("--neighbor"); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  if ($("#sphereLabels").checked) {
+    ctx.font = "10.5px ui-monospace, Menlo, monospace"; ctx.textAlign = "center";
+    const surface = cssVar("--plane");
+    derived[state.dict].topByN.slice(0, 24).forEach((i) => {
+      const [sx, syy, z] = pts[i];
+      if (z < 0.15) return;
+      const label = JSON.stringify(d.regions[i].lens[0] || "").slice(1, -1).trim() || "·";
+      ctx.lineWidth = 3; ctx.strokeStyle = surface;
+      ctx.strokeText(label, sx, syy - 8);
+      ctx.fillStyle = cssVar("--ink"); ctx.fillText(label, sx, syy - 8);
+    });
+  }
+}
+function spherePick(mx, my) {
+  const d = cur(), der = derived[state.dict];
+  const W = sphere.canvas.clientWidth, H = sphere.canvas.clientHeight;
+  let best = -1, bestScore = -1e9;
+  for (let i = 0; i < d.regions.length; i++) {
+    const [sx, sy, z] = sphereProject(d.regions[i].s, W, H);
+    const dd = Math.hypot(sx - mx, sy - my);
+    if (dd < Math.max(9, der.radius[i] + 4)) {
+      const score = z - dd * 0.01;
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+  }
+  return best;
+}
+function spinTick() {
+  if (sphere.spin && state.mode === "sphere") { sphere.yaw += 0.0022; drawSphere(); }
+  requestAnimationFrame(spinTick);
+}
+
+/* ------------------------------------------------ region page */
+/* ------------------------------------------------ member-scan panel
+   The build ships each prompt once plus a char span per example, so the window
+   is cut here rather than four times server-side. Mirrors `windowed()` in
+   dashboard_build.py — keep the two in step. */
+const MS_BEFORE = 90, MS_AFTER = 150;
+function msWindow(text, a, b) {
+  if (a < 0 || b <= a) {
+    let t = text.slice(0, MS_BEFORE + MS_AFTER);
+    if (text.length > t.length) t += "…";
+    return { t, a: -1, b: -1 };
+  }
+  const s = Math.max(0, a - MS_BEFORE), e = Math.min(text.length, b + MS_AFTER);
+  let t = text.slice(s, e), shift = 0;
+  if (s > 0) { t = "…" + t; shift = s - 1; }
+  if (e < text.length) t += "…";
+  return { t, a: a - shift, b: b - shift };
+}
+/* Three modes, not four. "Top proj · all" used to sit here as a peer, but it
+   returns the identical set to `proj` in 91% of regions and only 3% of its rows
+   are foreign-owned — it is a modifier on the projection ranking, not a
+   separate question, so it is a checkbox that appears only in that mode. */
+const MS_MODES = [
+  ["random", "Random members"], ["closest", "Closest"], ["proj", "Top projection"],
+];
+/* Which stored list a mode reads: `proj` swaps to the all-activations list when
+   the non-member box is ticked. */
+function msKey() {
+  return state.msMode === "proj" && state.msAll ? "projall" : state.msMode;
+}
+/* Everything except `random` is ranked against the exemplar — the activation
+   that happened to arrive first and open the cell. Measured across 2B/4B/27B,
+   two different member seeds agree on only ~21% of a top-8 list against a ~16%
+   chance rate, and the leading axis carries ~10% of a region's variance against
+   a ~4% isotropic null. So these lists are largely an artifact of stream order,
+   and the panel has to say so where the list is, not in a footnote. */
+const SEED_ANCHORED = { closest: 1, proj: 1, projall: 1 };
+function seedCaveat(r, d) {
+  const s = r.seed;
+  if (!s || !SEED_ANCHORED[state.msMode]) return null;
+  const [cosMean, pc1, effDim, nSamp] = s;
+  const box = el("div", "seed-warn");
+  box.append(el("b", null, "Ranked against the seed activation. "));
+  box.append(document.createTextNode(
+    "The exemplar is whichever activation opened this cell, not a learned direction. " +
+    "Here it sits at cos " + cosMean.toFixed(2) + " from the region's own mean, its leading axis " +
+    "holds " + (100 * pc1).toFixed(0) + "% of the spread (isotropic null " + (100 * d.pc1Null).toFixed(0) +
+    "%), and the members fill ~" + effDim.toFixed(0) + " effective dimensions of " + (nSamp - 1) + " available. " +
+    "A region is a solid angle, not a ray: had a different activation seeded it, most of this list would differ. " +
+    "Use Random members for a seed-independent view."));
+  return box;
+}
+/* Each mode answers a different question, and the differences are the point —
+   so the caption states what the mode shows AND how it can mislead. */
+function msNote(mode, r, d) {
+  const med = (xs) => { if (!xs.length) return null; const s = [...xs].sort((p, q) => p - q); return s[s.length >> 1]; };
+  const ms = d.ms.regions[r.i];
+  switch (mode) {
+    case "closest": {
+      const mr = med(ms.random.map((e) => e[4]));
+      return ["Nearest members by cosine distance to the exemplar — an extension of the pickle's top-10. " +
+        "This is the view that oversells coherence" +
+        (mr != null ? `: a typical member of this region sits at d = ${mr.toFixed(2)}, not ${(med(ms.closest.map((e) => e[4])) ?? 0).toFixed(2)}.` : "."), false];
+    }
+    case "proj":
+      return ["Members ranked by ⟨h − c, e⟩ onto the exemplar direction with both direction and magnitude " +
+        "This is the SAE max-activating-example analogue, and it is not recoverable from the saved " +
+        "dictionary: EP normalises activations away, so this needed a rescan of the corpus. In practice " +
+        "it re-ranks the Closest list rather than replacing it — the two share about 78% of their rows.", false];
+    case "projall": {
+      const n = ms.projall.length, f = ms.projall.filter((e) => e[6] !== r.i).length;
+      return [`Now ranking over every activation, member or not. ${f} of ${n} shown are owned by a ` +
+        "different cell — this direction fires hardest on tokens it does not claim. Click a badge to jump there.",
+        f > 0];
+    }
+    case "random": {
+      const mr = med(ms.random.map((e) => e[4]));
+      return ["A uniform sample of this region's members, and the default because it is the only mode " +
+        "not ranked against the first-arrival exemplar — what you see here does not depend on which " +
+        "activation happened to seed the cell. " +
+        (mr != null ? `Median distance ${mr.toFixed(2)} vs θ = ${d.threshold.toFixed(2)}. ` : "") +
+        "Ordered by radius and cut into thirds, so you can see the core and the rim of the cell separately — " +
+        "if they read as different features, the region is less coherent than any ranked list suggests.", true];
+    }
+  }
+  return ["", false];
+}
+function msRow(rec, mode, d, rank, ri) {
+  const [g, pos, a, b, dist, proj] = rec;
+  const w = msWindow(d.ms.prompts[g], a, b);
+  const row = el("div", "ms-row");
+  const meta = el("div", "ms-meta");
+  meta.append(el("span", "ms-rank", "#" + rank));
+  const byDist = (mode === "closest" || mode === "random");
+  meta.append(el("span", "ms-primary", byDist ? "d = " + dist.toFixed(3) : "proj = " + proj.toFixed(1)));
+  meta.append(el("span", "ms-second", byDist ? "proj " + proj.toFixed(1) : "d " + dist.toFixed(3)));
+  const bar = el("div", "minibar"); const fill = el("i");
+  fill.style.width = Math.max(2, Math.min(100, byDist ? (dist / d.threshold) * 100 : (proj / Math.max(1e-6, d.ms.regions[ri].pmx)) * 100)) + "%";
+  bar.append(fill); meta.append(bar);
+  meta.append(el("span", "pos-badge", "pos " + pos));
+  if (mode === "projall" && rec[6] !== ri) {
+    const own = rec[6];
+    const badge = el("button", "ms-foreign", own < 0 ? "not a member" : "owned by #" + own);
+    if (own >= 0) badge.onclick = () => selectRegion(own);
+    else badge.disabled = true;
+    meta.append(badge);
+  }
+  row.append(meta, promptTextEl(w));
+  return row;
+}
+function renderMemberCard(r, d) {
+  const card = el("div", "card");
+  const head = el("div", "card-head");
+  head.append(el("h3", null, "Member examples"));
+  const seg = el("div", "seg");
+  MS_MODES.forEach(([k, label]) => {
+    const b = el("button", null, label);
+    b.setAttribute("aria-pressed", String(state.msMode === k));
+    b.onclick = () => { state.msMode = k; renderRegionPage(); };
+    seg.append(b);
+  });
+  head.append(seg);
+  if (state.msMode === "proj") {
+    const lab = el("label", "ms-toggle");
+    const box = el("input"); box.type = "checkbox"; box.checked = state.msAll;
+    box.onchange = () => { state.msAll = box.checked; renderRegionPage(); };
+    lab.append(box, document.createTextNode(" include non-members"));
+    head.append(lab);
+  }
+  card.append(head);
+
+  const ms = d.ms.regions[r.i];
+  const [note, warn] = msNote(msKey(), r, d);
+  card.append(Object.assign(el("div", "ms-note" + (warn ? " warn" : "")), { textContent: note }));
+  const caveat = seedCaveat(r, d);
+  if (caveat) card.append(caveat);
+
+  const q = ms.pq || [];
+  if (q.length === 5) {
+    const strip = el("div", "ms-dist");
+    strip.append(el("span", null, "projection over " + fmt(ms.nS) + " members:"));
+    [["p5", q[0]], ["p25", q[1]], ["med", q[2]], ["p75", q[3]], ["p95", q[4]], ["max", ms.pmx]]
+      .forEach(([k, v]) => { const s = el("span"); s.append(el("b", null, k + " "), document.createTextNode(v.toFixed(1))); strip.append(s); });
+    card.append(strip);
+  }
+
+  const rows = ms[msKey()] || [];
+  if (!rows.length) card.append(el("div", "ms-empty", "No examples in this mode for this region."));
+  else if (msKey() === "random") {
+    /* Same uniform sample, ordered by radius and cut into thirds. A flat list
+       hides the thing that matters — the core and the rim of a cell can look
+       like different features — and unlike a top-k ranking this costs no
+       seed-dependence, because ordering a uniform sample is not selecting one. */
+    const sorted = [...rows].sort((a, b) => a[4] - b[4]);
+    const LABEL = {
+      core: "nearest the exemplar — what a top-k list would have shown you",
+      mid: "typical members",
+      rim: "out at the boundary, where most of the cell's volume is",
+    };
+    shellBands(sorted.length).forEach(([a, b, name]) => {
+      if (a >= b) return;
+      const hd = el("div", "ms-band", name + " ");
+      hd.append(el("b", null, "d " + sorted[a][4].toFixed(2) + "–" + sorted[b - 1][4].toFixed(2)
+        + " · " + LABEL[name]));
+      card.append(hd);
+      sorted.slice(a, b).forEach((rec, n) => card.append(msRow(rec, "random", d, a + n + 1, r.i)));
+    });
+  } else rows.forEach((rec, n) => card.append(msRow(rec, msKey(), d, n + 1, r.i)));
+  return card;
+}
+
+/* ---------- cell shell ----------------------------------------------------
+   The EP analogue of an SAE activation histogram, and the one place the two
+   idioms genuinely diverge: an SAE feature is a single direction with no rival,
+   so a member has nothing to be *contested* by. An EP assignment is argmax over
+   every exemplar, so each member carries a margin — how nearly a different cell
+   took it — and that is the colour channel here.
+
+   Radius is measured (true cosine distance to the exemplar). ANGLE IS NOT: the
+   bearings are a golden-angle spread so the dots do not pile up, and the caption
+   says so, the same discipline the neighbourhood map already follows. */
+const CONTESTED = 20;      // milli-units of margin
+
+/* Split the radius-sorted sample into equal thirds. Bands are by rank, not by
+   fixed distance cuts, so they stay populated in tight and diffuse cells alike. */
+function shellBands(n) {
+  const a = Math.ceil(n / 3), b = Math.ceil((2 * n) / 3);
+  return [[0, a, "core"], [a, b, "mid"], [b, n, "rim"]];
+}
+function shellSummary(r, d) {
+  const [ds, mg] = r.sh, n = ds.length;
+  const med = ds[n >> 1] / 1000;
+  const contested = mg.filter((m) => m < CONTESTED).length;
+  const lost = mg.filter((m) => m < 0).length;
+  return { n, med, pct: med / Math.max(d.threshold, 1e-6), contested, lost,
+           medMargin: [...mg].sort((a, b) => a - b)[n >> 1] / 1000 };
+}
+function drawShell(cv, r, d) {
+  const W = cv.clientWidth || 320, H = 264, dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cx = W / 2, cy = H / 2;
+  const [ds, mg] = r.sh, th = Math.max(d.threshold, 1e-6);
+  const R = Math.min(W, H) / 2 - 24, scale = R / th;
+  const css = getComputedStyle(document.documentElement);
+  const V = (k, f) => (css.getPropertyValue(k) || "").trim() || f;
+  const muted = V("--muted", "#8b909c"), accent = V("--accent", "#2a78d6");
+  const warn = V("--neighbor", "#eb6834"), hair = V("--hairline", "#e4e6ec");
+
+  ctx.lineWidth = 1; ctx.strokeStyle = hair;
+  [0.25, 0.5, 0.75].forEach((f) => {
+    ctx.beginPath(); ctx.arc(cx, cy, th * f * scale, 0, 2 * Math.PI); ctx.stroke();
+  });
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = muted;
+  ctx.beginPath(); ctx.arc(cx, cy, th * scale, 0, 2 * Math.PI); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // median radius — the headline number, drawn so "most of the cell is rim" is
+  // visible rather than asserted
+  const med = ds[ds.length >> 1] / 1000;
+  ctx.strokeStyle = accent; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, med * scale, 0, 2 * Math.PI); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.lineWidth = 1;
+
+  const GOLD = Math.PI * (3 - Math.sqrt(5));
+  ds.forEach((dv, n) => {
+    const a = n * GOLD, rr = Math.max(0, dv / 1000) * scale;
+    const hot = mg[n] < CONTESTED;
+    ctx.fillStyle = hot ? warn : accent;
+    ctx.globalAlpha = hot ? 0.95 : 0.7;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, hot ? 3.5 : 2.8, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = muted;
+  ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, 2 * Math.PI); ctx.fill();
+
+  ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("θ = " + th.toFixed(2), cx, cy - th * scale - 8);
+  ctx.fillStyle = accent;
+  ctx.fillText("median " + med.toFixed(2), cx, cy + med * scale + 12);
+}
+function renderShellCard(r, d) {
+  const card = el("div", "card");
+  const h = el("h3", null, "Cell shape ");
+  h.append(el("span", "h3-note", "— where members actually sit, and how nearly they were lost"));
+  card.append(h);
+  const cv = document.createElement("canvas"); cv.id = "shellMap";
+  card.append(cv);
+
+  const s = shellSummary(r, d);
+  const stats = el("div", "shell-stats");
+  [["sample", s.n + " members"],
+   ["median radius", s.med.toFixed(3) + " (" + (100 * s.pct).toFixed(0) + "% of θ)"],
+   ["contested", s.contested + "/" + s.n + " (" + (100 * s.contested / s.n).toFixed(0) + "%)"],
+   ["median margin", s.medMargin.toFixed(3)],
+  ].forEach(([k, v]) => {
+    const x = el("span"); x.append(el("b", null, k + " "), document.createTextNode(v)); stats.append(x);
+  });
+  card.append(stats);
+
+  const key = el("div", "shell-key");
+  const k1 = el("span"), k2 = el("span");
+  k1.append(el("i", "near"), document.createTextNode("securely held"));
+  k2.append(el("i", "hot"), document.createTextNode("contested (margin < 0.02)"));
+  key.append(k1, k2);
+  card.append(key);
+
+  card.append(Object.assign(el("div", "map-caption"), { textContent:
+    "Each dot is one uniformly sampled member at its true cosine distance from the exemplar; " +
+    "the angle is arbitrary (a golden-angle spread so the dots separate) — read radius only. " +
+    "Members fill the cell out to θ rather than clustering at the centre, which is why a top-k " +
+    "list shows you the innermost sliver" +
+    (r.seed ? ", and why this cell needs ~" + r.seed[2].toFixed(0) + " dimensions to describe" : "") + "." }));
+
+  const contestedNote = el("div", "map-caption");
+  contestedNote.textContent =
+    "Orange members were within 0.02 similarity of being claimed by a different region — " +
+    "assignment is a plurality, not a clean fact, and " + (100 * s.contested / s.n).toFixed(0) +
+    "% of this sample sits that close to the boundary." +
+    (s.lost > 0
+      ? "  " + s.lost + " of them now rank a different exemplar first: leader clustering assigns on arrival, " +
+        "so a cell created later can end up closer, and merges move the target after the fact."
+      : "");
+  card.append(contestedNote);
+  requestAnimationFrame(() => drawShell(cv, r, d));
+  return card;
+}
+
+function tile(label, value, sub) {
+  const t = el("div", "tile");
+  t.append(el("div", "t-label", label), el("div", "t-value", value));
+  if (sub) t.append(el("div", "t-sub", sub));
+  return t;
+}
+function renderRegionPage() {
+  const wrap = $("#regionPage"), d = cur();
+  wrap.textContent = "";
+  if (state.sel < 0) state.sel = derived[state.dict].topByN[0];
+  const r = d.regions[state.sel];
+
+  const head = el("div", "region-head");
+  head.append(el("h1", null, "Region #" + r.i));
+  head.append(el("span", "crumb", d.model + " · layer " + d.layer + " · p=" + d.p + " · " + d.corpus));
+  if (r.label) head.append(el("span", "chip", r.label));
+  const nav = el("div", "nav-arrows");
+  const prev = el("button", null, "← prev"), next = el("button", null, "next →");
+  prev.onclick = () => selectRegion((state.sel - 1 + d.K) % d.K);
+  next.onclick = () => selectRegion((state.sel + 1) % d.K);
+  const inAtlas = el("button", null, "show in atlas");
+  inAtlas.onclick = () => { setMode("atlas"); };
+  nav.append(prev, next, inAtlas); head.append(nav);
+  wrap.append(head);
+
+  const tiles = el("div", "tiles");
+  tiles.append(
+    tile("Members", fmt(r.n), (100 * r.n / d.nActs).toFixed(2) + "% of activations"),
+    tile("Coherence", r.coh.toFixed(3), "1 = members agree"),
+    tile("Mean dist", r.md.toFixed(3), "± " + r.sd.toFixed(3) + " to exemplar"),
+    tile("Threshold θ", d.threshold.toFixed(3), "cell radius (cosine)"),
+    tile("Rank", "#" + (derived[state.dict].topByN.indexOf(state.sel) + 1), "of " + fmt(d.K) + " by size"),
+  );
+  if (r.jv !== undefined)
+    tiles.append(tile("Verbalizability", r.jv.toFixed(2),
+      "J-lens concentration (1 − H/ln V)"));
+  wrap.append(tiles);
+
+  const grid = el("div", "region-grid");
+  const left = el("div"), right = el("div");
+
+  // cell shape: first card on the right, so the honest picture of the region is
+  // adjacent to the exemplar rather than below three panels of readout
+  if (r.sh) right.append(renderShellCard(r, d));
+
+  // exemplar
+  const exCard = el("div", "card");
+  const exH = el("h3", null, "Exemplar ");
+  exH.append(Object.assign(el("span", "h3-note", "— the real activation that anchors this cell"), {}));
+  exCard.append(exH);
+  if (r.sm.length) exCard.append(promptRow(r.sm[0], d.threshold));
+  left.append(exCard);
+
+  // members — the rescanned panel supersedes the pickle's 10 closest when a
+  // member scan exists for this dictionary; otherwise fall back to it.
+  if (d.ms) {
+    left.append(renderMemberCard(r, d));
+  } else if (r.sm.length > 1) {
+    const mCard = el("div", "card");
+    const mh = el("h3", null, "Nearest members ");
+    mh.append(el("span", "h3-note", "— highlighted token is the one whose activation joined"));
+    mCard.append(mh);
+    r.sm.slice(1).forEach((s) => mCard.append(promptRow(s, d.threshold)));
+    left.append(mCard);
+  }
+  // boundary
+  if (r.bd.length) {
+    const bCard = el("div", "card");
+    const bh = el("h3", null, "Boundary members ");
+    bh.append(el("span", "h3-note", "— farthest from the exemplar, closest to leaving"));
+    bCard.append(bh);
+    r.bd.forEach((s) => bCard.append(promptRow(s, d.threshold)));
+    left.append(bCard);
+  }
+
+  // lens
+  const lensCard = el("div", "card");
+  lensCard.append(el("h3", null, "Logit lens · top vocab"));
+  const cols = el("div", "lens-cols");
+  const c1 = el("div"), c2 = el("div");
+  c1.append(el("div", "col-h", "exemplar direction")); c1.append(chipRow(r.lens));
+  c2.append(el("div", "col-h", "mean member direction")); c2.append(chipRow(r.lensM, "dim"));
+  cols.append(c1, c2); lensCard.append(cols);
+  right.append(lensCard);
+
+  // J-lens
+  if (r.jl) {
+    const jCard = el("div", "card");
+    const jh = el("h3", null, "J-lens · verbalized readout ");
+    jh.append(el("span", "h3-note", "— Jacobian transport to the final layer, then unembed"));
+    jCard.append(jh);
+    const jcols = el("div", "lens-cols");
+    const j1 = el("div"), j2 = el("div");
+    j1.append(el("div", "col-h", "exemplar direction")); j1.append(chipRow(r.jl, "jl"));
+    j2.append(el("div", "col-h", "mean member direction")); j2.append(chipRow(r.jlM, "jl dim"));
+    jcols.append(j1, j2); jCard.append(jcols);
+
+    const vbRow = (label, v, sub, cls) => {
+      const row = el("div", "vb-row");
+      row.append(el("span", "vb-label", label));
+      const bar = el("div", "minibar"); const fill = el("i");
+      if (cls) fill.className = cls;
+      fill.style.width = Math.max(1.5, Math.min(100, v * 100)) + "%"; bar.append(fill);
+      const val = el("span", "vb-val", v.toFixed(2) + " ");
+      if (sub) val.append(el("span", "vb-sub", sub));
+      row.append(bar, val); return row;
+    };
+    const meter = el("div");
+    meter.style.marginTop = "10px";
+    meter.append(vbRow("J-lens verbalizability", r.jv, "mass " + (r.jm * 100).toFixed(0) + "%", "jl"));
+    meter.append(vbRow("· mean member dir", r.jvM, "mass " + (r.jmM * 100).toFixed(0) + "%", "jl"));
+    if (r.lv !== undefined) meter.append(vbRow("logit-lens (compare)", r.lv, null, null));
+    jCard.append(meter);
+    jCard.append(Object.assign(el("div", "map-caption"), { textContent:
+      "Verbalizability = 1 − entropy/ln|V| of the J-lens softmax at RMS-1 scale. " +
+      "Peaked distribution (high score, high top-8 mass) → a token-verbalizable concept; " +
+      "flat → a mechanical/syntax region where the top tokens deserve little trust." +
+      (d.jlens.nPrompts
+        ? "  Lens fit on " + fmt(d.jlens.nPrompts) + " prompts — compare this score across " +
+          "models only when that budget matches, since a thinner fit flattens the readout."
+        : "") }));
+    right.append(jCard);
+  }
+
+  // neighbors
+  const nbCard = el("div", "card");
+  const nh = el("h3", null, "Nearest regions ");
+  nh.append(el("span", "h3-note", "— exact cosine distance in the full "
+    + (r.hood ? d.dModel + "-dimensional " : "") + "activation space"));
+  nbCard.append(nh);
+  if (r.hood) {
+    const hdr = el("div", "nb-row nb-head");
+    hdr.append(el("span", "nb-id", ""), el("span", "nb-lens", ""),
+      el("span", "nb-cos", "dist"), el("span", "nb-cos", "wall"));
+    nbCard.append(hdr);
+    r.hood.nb.forEach((rec) => {
+      const [j, dist, ang, adj, reach] = rec, bd = hoodWall(rec);
+      const row = el("div", "nb-row");
+      const btn = el("button", "linkbtn nb-id", "#" + j);
+      btn.onclick = () => selectRegion(j);
+      row.append(btn, el("span", "nb-lens", lensPreview(d.regions[j], 4)));
+      const bar = el("div", "minibar"); const fill = el("i");
+      fill.style.width = Math.max(2, Math.min(100, (dist / Math.max(d.threshold, 1e-6)) * 100)) + "%";
+      bar.append(fill); row.append(bar);
+      row.append(el("span", "nb-cos", dist.toFixed(3)));
+      // Shown for completeness, dimmed because it is redundant: at every scale
+      // measured the wall is exactly 1 - sqrt(1 - dist/2), so this column is a
+      // fixed monotone rescaling of the one beside it and ranks identically.
+      const w = el("span", "nb-cos", bd.toFixed(3));
+      w.style.opacity = rec.length > 5 ? "1" : "0.45";
+      w.title = rec.length > 5
+        ? "a third cell constrains this wall — not the two-point value"
+        : "= 1 − √(1 − dist/2), the two-cell closed form; carries no information beyond dist";
+      row.append(w);
+      nbCard.append(row);
+    });
+  } else {
+    r.nb.forEach(([j, cos]) => {
+      const row = el("div", "nb-row");
+      const btn = el("button", "linkbtn nb-id", "#" + j);
+      btn.onclick = () => selectRegion(j);
+      row.append(btn, el("span", "nb-lens", lensPreview(d.regions[j], 4)));
+      const bar = el("div", "minibar"); const fill = el("i");
+      fill.style.width = Math.max(2, cos * 100) + "%"; bar.append(fill);
+      row.append(bar, el("span", "nb-cos", cos.toFixed(3)));
+      nbCard.append(row);
+    });
+  }
+  right.append(nbCard);
+
+  // local map
+  const mapCard = el("div", "card");
+  mapCard.append(el("h3", null, r.hood
+    ? "Nearest exemplars — distances exact, bearings fitted"
+    : "Local neighborhood — radius is exact"));
+  const cv = document.createElement("canvas"); cv.id = "nbMap";
+  mapCard.append(cv);
+  mapCard.append(Object.assign(el("div", "map-caption"), { textContent: r.hood
+    ? ("The " + r.hood.nb.length + " nearest exemplars, ranked by cosine distance in the full " + d.dModel +
+       "-dimensional space rather than in a projection — so unlike the sphere view, these really are the " +
+       "closest regions. Each radius is that exact distance; only the bearings are fitted, by local MDS on " +
+       "this neighbourhood alone (angle stress " + r.hood.stress.toFixed(2) + ", 0 = faithful). Read distances, " +
+       "not shape. Dashed ring = θ; the inner shape is where the cell stops, but see below.")
+    : "Focus region at center; dashed ring = θ (no exemplar can sit inside it). Neighbor radius = true cosine distance; angle follows the t-SNE bearing (approximate)." }));
+  if (r.hood) {
+    // A negative result, stated as one: the boundary geometry here is trivial,
+    // and a caption that let the map imply otherwise would be the misleading part.
+    const s = el("div", "map-caption");
+    const tp = r.hood.twoPoint === r.hood.tested;
+    s.textContent = `Tested ${r.hood.tested} candidate cells: ${r.hood.nAdj} share a real facet, ` +
+      `${r.hood.nReach} of those are reachable within θ, and the wall is set by the neighbouring ` +
+      `pair alone in ${r.hood.twoPoint} of them.` +
+      (r.hood.nAdj === r.hood.tested && tp
+        ? "  Both numbers are degenerate, and that is the finding: with K < d the exemplars are near-orthogonal, so every pair shares a facet and no third cell ever constrains a boundary. The wall then collapses to 1 − √(1 − dist/2) ≈ 0.287·dist — a fixed function of the distance already plotted. Voronoi structure at this scale tells you nothing the cosine distances do not; treat this panel as a nearest-neighbour view."
+        : "");
+    mapCard.append(s);
+  }
+  right.append(mapCard);
+
+  grid.append(left, right); wrap.append(grid);
+  requestAnimationFrame(() => (r.hood ? drawHoodMap(cv, r, d) : drawNbMap(cv, r, d)));
+}
+/* Bisector radius for a neighbour record. The builder ships a 6th element only
+   when a third cell actually constrained the wall; otherwise the value is the
+   two-cell closed form and is rederived here rather than stored K*16 times. */
+function hoodWall(rec) {
+  return rec.length > 5 ? rec[5] : 1 - Math.sqrt(Math.max(0, 1 - rec[1] / 2));
+}
+/* Nearest-exemplar map. Radius = true cosine distance in full space; angle =
+   local-MDS bearing, the only approximate quantity on the plot, reported as
+   `stress`. The inner outline is the cell wall, drawn faintly because in this
+   regime it is a fixed rescaling of the radii rather than independent structure. */
+function drawHoodMap(cv, r, d) {
+  const W = cv.clientWidth || 320, H = 300, dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cx = W / 2, cy = H / 2;
+  const nb = r.hood.nb;
+  if (!nb.length) return;
+  const maxDist = Math.max(d.threshold, ...nb.map((n) => n[1])) * 1.06;
+  const R = Math.min(W, H) / 2 - 30;
+  const scale = R / maxDist;
+  const rad = (a) => (a * Math.PI) / 180;
+
+  // cell wall: polygon through the bisector radii, ordered by bearing. Kept
+  // because it is the true extent of the cell, but de-emphasised — it is a
+  // scaled copy of the neighbour radii, not an independent measurement.
+  const wall = nb.map((rec) => ({ ang: rec[2], bd: hoodWall(rec) }))
+                 .sort((a, b) => a.ang - b.ang);
+  ctx.beginPath();
+  wall.forEach((w, n) => {
+    const x = cx + Math.cos(rad(w.ang)) * w.bd * scale;
+    const y = cy + Math.sin(rad(w.ang)) * w.bd * scale;
+    n ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = cssVar("--accent-soft"); ctx.fill();
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 1; ctx.stroke();
+  ctx.setLineDash([]);
+
+  // θ ring
+  ctx.beginPath(); ctx.arc(cx, cy, d.threshold * scale, 0, 6.2832);
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 1; ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = cssVar("--muted");
+  ctx.fillText("θ = " + d.threshold.toFixed(2), cx, cy - d.threshold * scale - 5);
+
+  nb.forEach((rec) => {
+    const [j, dist, ang, adj, reach] = rec, bd = hoodWall(rec);
+    const a = rad(ang);
+    const nx = cx + Math.cos(a) * dist * scale, ny = cy + Math.sin(a) * dist * scale;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nx, ny);
+    ctx.strokeStyle = cssVar("--hairline"); ctx.lineWidth = 1; ctx.stroke();
+    // tick at the wall crossing
+    const wx = cx + Math.cos(a) * bd * scale, wy = cy + Math.sin(a) * bd * scale;
+    ctx.beginPath(); ctx.arc(wx, wy, 2, 0, 6.2832);
+    ctx.fillStyle = cssVar("--muted"); ctx.fill();
+    ctx.beginPath(); ctx.arc(nx, ny, 5.5, 0, 6.2832);
+    ctx.fillStyle = cssVar("--neighbor"); ctx.globalAlpha = reach ? 1 : 0.45;
+    ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = cssVar("--ink-2");
+    ctx.fillText("#" + j, nx, ny - 9);
+  });
+  ctx.beginPath(); ctx.arc(cx, cy, 6.5, 0, 6.2832);
+  ctx.fillStyle = cssVar("--accent"); ctx.fill();
+  ctx.fillStyle = cssVar("--ink"); ctx.fillText("#" + r.i, cx, cy - 11);
+}
+function drawNbMap(cv, r, d) {
+  const W = cv.clientWidth || 320, H = 280, dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cx = W / 2, cyy = H / 2;
+  const maxDist = Math.max(...r.nb.map(([, c]) => 1 - c), d.threshold * 1.4);
+  const R = Math.min(W, H) / 2 - 26;
+  const scale = R / maxDist;
+  // θ ring
+  ctx.beginPath(); ctx.arc(cx, cyy, d.threshold * scale, 0, 6.2832);
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 1; ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--muted");
+  ctx.textAlign = "center";
+  ctx.fillText("θ = " + d.threshold.toFixed(2), cx, cyy - d.threshold * scale - 5);
+  // neighbors
+  const [fx, fy] = r.xy;
+  r.nb.forEach(([j, cos]) => {
+    const o = d.regions[j];
+    const ang = Math.atan2(o.xy[1] - fy, o.xy[0] - fx);
+    const dist = (1 - cos) * scale;
+    const nx = cx + Math.cos(ang) * dist, ny = cyy + Math.sin(ang) * dist;
+    ctx.beginPath(); ctx.moveTo(cx, cyy); ctx.lineTo(nx, ny);
+    ctx.strokeStyle = cssVar("--hairline"); ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(nx, ny, 6, 0, 6.2832);
+    ctx.fillStyle = cssVar("--neighbor"); ctx.fill();
+    ctx.fillStyle = cssVar("--ink-2");
+    const lbl = "#" + j;
+    ctx.fillText(lbl, nx, ny - 10);
+  });
+  ctx.beginPath(); ctx.arc(cx, cyy, 7.5, 0, 6.2832);
+  ctx.fillStyle = cssVar("--accent"); ctx.fill();
+  ctx.fillStyle = cssVar("--ink"); ctx.fillText("#" + r.i, cx, cyy - 12);
+}
+
+/* ------------------------------------------------ table */
+const tableState = { sortKey: "n", dir: -1, shown: 0, rows: [] };
+function colsFor(d) {
+  const cols = [
+    ["i", "Region"], ["n", "Members"], ["share", "%"],
+    ["coh", "Coherence"], ["md", "Mean d"],
+    ["lens", "Logit lens (exemplar dir)"],
+  ];
+  if (d.jlens) cols.push(["jl", "J-lens (exemplar dir)"], ["jv", "Verb."]);
+  cols.push(["snip", "Exemplar excerpt"]);
+  return cols;
+}
+function renderTableHead() {
+  const tr = $("#tableHead"); tr.textContent = "";
+  colsFor(cur()).forEach(([key, label]) => {
+    const th = el("th", null, label + " ");
+    if (tableState.sortKey === key) th.append(el("span", "arrow", tableState.dir < 0 ? "↓" : "↑"));
+    th.onclick = () => {
+      if (tableState.sortKey === key) tableState.dir *= -1;
+      else { tableState.sortKey = key; tableState.dir = key === "i" ? 1 : -1; }
+      buildTableRows(); renderTableHead();
+    };
+    tr.append(th);
+  });
+}
+function buildTableRows() {
+  const d = cur();
+  const idx = d.regions.map((_, i) => i);
+  const keyf = {
+    i: (i) => i, n: (i) => d.regions[i].n, share: (i) => d.regions[i].n,
+    coh: (i) => d.regions[i].coh, md: (i) => d.regions[i].md,
+    lens: (i) => d.regions[i].lens[0] || "", snip: (i) => d.regions[i].sm[0] ? d.regions[i].sm[0].t : "",
+    jl: (i) => (d.regions[i].jl || [""])[0], jv: (i) => d.regions[i].jv ?? -1,
+  }[tableState.sortKey];
+  idx.sort((a, b) => {
+    const va = keyf(a), vb = keyf(b);
+    return (va < vb ? -1 : va > vb ? 1 : 0) * tableState.dir;
+  });
+  tableState.rows = idx; tableState.shown = 0;
+  $("#tableBody").textContent = "";
+  appendTableChunk();
+}
+function appendTableChunk() {
+  const d = cur(), body = $("#tableBody");
+  const end = Math.min(tableState.rows.length, tableState.shown + 150);
+  for (let k = tableState.shown; k < end; k++) {
+    const i = tableState.rows[k], r = d.regions[i];
+    const tr = document.createElement("tr");
+    tr.tabIndex = 0;
+    const cells = [
+      ["td", "#" + r.i], ["td num", fmt(r.n)],
+      ["td num", (100 * r.n / d.nActs).toFixed(2)],
+      ["td num", r.coh.toFixed(3)], ["td num", r.md.toFixed(3)],
+    ];
+    cells.forEach(([cls, txt]) => {
+      const td = document.createElement("td");
+      if (cls.includes("num")) td.className = "num";
+      td.textContent = txt; tr.append(td);
+    });
+    const tdL = document.createElement("td");
+    tdL.append(Object.assign(el("span", "cell-lens"), { textContent: lensPreview(r, 5) }));
+    tr.append(tdL);
+    if (d.jlens) {
+      const tdJ = document.createElement("td");
+      tdJ.append(Object.assign(el("span", "cell-lens jl"), { textContent: tokPreview(r.jl, 5) }));
+      tr.append(tdJ);
+      const tdV = document.createElement("td");
+      tdV.className = "num";
+      tdV.textContent = r.jv !== undefined ? r.jv.toFixed(2) : "—";
+      tr.append(tdV);
+    }
+    const tdS = document.createElement("td");
+    tdS.append(Object.assign(el("span", "cell-snip"), { textContent: r.sm[0] ? r.sm[0].t : "" }));
+    tr.append(tdS);
+    tr.onclick = () => { state.sel = i; setMode("region"); };
+    tr.onkeydown = (e) => { if (e.key === "Enter") tr.onclick(); };
+    body.append(tr);
+  }
+  tableState.shown = end;
+}
+$("#tableScroller").addEventListener("scroll", (e) => {
+  const t = e.target;
+  if (t.scrollTop + t.clientHeight > t.scrollHeight - 400 && tableState.shown < tableState.rows.length)
+    appendTableChunk();
+});
+
+/* ------------------------------------------------ search */
+const searchInput = $("#searchInput"), searchResults = $("#searchResults");
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  searchResults.textContent = "";
+  if (q.length < 2) { searchResults.style.display = "none"; return; }
+  const d = cur(), der = derived[state.dict];
+  const hits = [];
+  for (let i = 0; i < d.regions.length && hits.length < 20; i++) {
+    const pos = der.searchIdx[i].indexOf(q);
+    if (pos >= 0) hits.push([i, pos]);
+  }
+  if (!hits.length) {
+    const none = el("div", "sr", "No matches in this dictionary");
+    none.style.color = "var(--muted)";
+    searchResults.append(none);
+  }
+  hits.forEach(([i]) => {
+    const r = d.regions[i];
+    const b = el("button", "sr");
+    const line1 = el("div", "sr-id", "#" + i + "  ·  " + fmt(r.n) + " members");
+    const line2 = el("div", "sr-ctx", lensPreview(r, 5) + "  —  " + (r.sm[0] ? r.sm[0].t.slice(0, 80) : ""));
+    b.append(line1, line2);
+    b.onclick = () => { searchResults.style.display = "none"; searchInput.value = ""; selectRegion(i); };
+    searchResults.append(b);
+  });
+  searchResults.style.display = "block";
+}
+searchInput.addEventListener("input", (e) => doSearch(e.target.value));
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { const f = searchResults.querySelector(".sr"); if (f && f.onclick) f.onclick(); }
+  if (e.key === "Escape") { searchResults.style.display = "none"; searchInput.blur(); }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".searchbox")) searchResults.style.display = "none";
+});
+
+/* ------------------------------------------------ mode & selection */
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll("nav.tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  $("#view-" + mode).classList.add("active");
+  pushHash();
+  redraw();
+}
+function selectRegion(i) {
+  state.sel = i;
+  pushHash();
+  redraw();
+}
+function redraw() {
+  if (state.mode === "atlas") { drawAtlas(); renderPanel($("#atlasPanel")); }
+  else if (state.mode === "sphere") { drawSphere(); renderPanel($("#spherePanel")); }
+  else if (state.mode === "region") renderRegionPage();
+  else if (state.mode === "table") { renderTableHead(); buildTableRows(); }
+  else if (state.mode === "testing") renderTesting();
+  renderStatus();
+}
+
+/* ------------------------------------------------ testing tab */
+const T = { refusal: { view: null, sel: -1, hover: -1 },
+            concept: { view: null, sel: -1, hover: -1, ci: 0, q: "" } };
+const pctT = (x) => (x * 100).toFixed(0) + "%";
+const signedT = (x) => (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(0);
+
+function abarRowT(label, rate, delta, kind) {
+  const row = el("div", "abar-row");
+  const lab = el("div", "abar-label"); lab.innerHTML = label; row.append(lab);
+  const track = el("div", "abar-track");
+  const fill = el("div", "abar-fill");
+  fill.style.width = Math.max(1.5, rate * 100) + "%";
+  fill.style.background = kind === "null" ? "var(--muted)"
+    : (delta == null ? "var(--ink-2)" : "var(--accent)");
+  if (kind === "null") fill.style.opacity = ".5";
+  track.append(fill); row.append(track);
+  const v = el("div", "abar-val"); v.append(pctT(rate));
+  if (delta != null) v.append(el("span", "dlt" + (delta < 0 ? " neg" : ""), "Δ " + signedT(delta)));
+  row.append(v); return row;
+}
+function section(cls) { return el("div", "tpad" + (cls ? " " + cls : "")); }
+
+/* ---- generic interactive scatter used by both testing sub-pages ---- */
+function makeScatter(host, page, st, opts) {
+  const cv = el("canvas"); host.append(cv);
+  const ctx = cv.getContext("2d");
+  const coordsFor = () => (state.testLayout === "tsne" ? page.tsne : page.pca);
+  let W = 0, H = 0, dpr = Math.min(2, devicePixelRatio || 1);
+
+  function resize() {
+    const r = host.getBoundingClientRect();
+    W = Math.max(120, r.width); H = Math.max(120, r.height);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + "px"; cv.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function fit() {
+    const P = coordsFor();
+    const xs = P.map((p) => p[0]), ys = P.map((p) => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const pad = 42, k = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - 2 * pad) / (y1 - y0 || 1));
+    st.view = { k, x: pad - x0 * k + (W - 2 * pad - (x1 - x0) * k) / 2,
+                     y: pad - y0 * k + (H - 2 * pad - (y1 - y0) * k) / 2 };
+  }
+  const toScreen = (p) => [p[0] * st.view.k + st.view.x, p[1] * st.view.k + st.view.y];
+
+  function draw() {
+    if (!W || cv.width === 0) resize();
+    if (!st.view) fit();
+    ctx.clearRect(0, 0, W, H);
+    const P = coordsFor(), sel = st.sel;
+    const nbSet = new Set();
+    if (sel >= 0 && page.regions[sel]) page.regions[sel].nb.forEach((n) => nbSet.add(n[0]));
+    for (let i = 0; i < page.regions.length; i++) {
+      const r = page.regions[i], sc = toScreen(P[i]), x = sc[0], y = sc[1];
+      if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+      const rad = opts.radiusOf(r, i === sel), ring = opts.ringOf(r);
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, 7);
+      ctx.fillStyle = opts.colorOf(r, i);
+      ctx.globalAlpha = (sel >= 0 && i !== sel && !nbSet.has(i) && !ring) ? 0.45 : 1;
+      ctx.fill(); ctx.globalAlpha = 1;
+      if (ring) { ctx.lineWidth = 2; ctx.strokeStyle = ring === "null" ? cssVar("--muted") : cssVar("--accent"); ctx.beginPath(); ctx.arc(x, y, rad + 2.5, 0, 7); ctx.stroke(); }
+      if (nbSet.has(i)) { ctx.lineWidth = 2; ctx.strokeStyle = cssVar("--neighbor"); ctx.beginPath(); ctx.arc(x, y, rad + 2.5, 0, 7); ctx.stroke(); }
+      if (i === sel) { ctx.lineWidth = 2.5; ctx.strokeStyle = cssVar("--accent"); ctx.beginPath(); ctx.arc(x, y, rad + 3.5, 0, 7); ctx.stroke(); }
+    }
+    ctx.font = "600 11px ui-sans-serif, system-ui"; ctx.textAlign = "center";
+    for (let i = 0; i < page.regions.length; i++) {
+      const r = page.regions[i], ring = opts.ringOf(r);
+      if (!ring) continue;
+      const txt = opts.labelOf ? opts.labelOf(r, ring) : null;
+      if (!txt) continue;
+      const sc = toScreen(P[i]), x = sc[0], y = sc[1], off = opts.radiusOf(r, false) + 7;
+      ctx.lineWidth = 3; ctx.strokeStyle = cssVar("--surface"); ctx.strokeText(txt, x, y - off);
+      ctx.fillStyle = ring === "null" ? cssVar("--muted") : cssVar("--accent"); ctx.fillText(txt, x, y - off);
+    }
+  }
+  function pick(mx, my) {
+    const P = coordsFor(); let best = -1, bd = 14 * 14;
+    for (let i = 0; i < page.regions.length; i++) {
+      const sc = toScreen(P[i]), dx = sc[0] - mx, dy = sc[1] - my, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  let drag = false, moved = false, lx = 0, ly = 0;
+  cv.addEventListener("pointerdown", (e) => { drag = true; moved = false; lx = e.clientX; ly = e.clientY; try { cv.setPointerCapture(e.pointerId); } catch (_) {} cv.classList.add("dragging"); });
+  cv.addEventListener("pointermove", (e) => {
+    const rect = cv.getBoundingClientRect();
+    if (drag) { const dx = e.clientX - lx, dy = e.clientY - ly; if (Math.abs(dx) + Math.abs(dy) > 2) moved = true; st.view.x += dx; st.view.y += dy; lx = e.clientX; ly = e.clientY; draw(); }
+    else { const i = pick(e.clientX - rect.left, e.clientY - rect.top); if (i !== st.hover) { st.hover = i; if (i >= 0) opts.onHover(i, e.clientX, e.clientY); else hideTooltip(); } }
+  });
+  cv.addEventListener("pointerup", (e) => {
+    drag = false; cv.classList.remove("dragging");
+    if (!moved) { const rect = cv.getBoundingClientRect(); const i = pick(e.clientX - rect.left, e.clientY - rect.top); if (i >= 0) opts.onPick(i); }
+  });
+  cv.addEventListener("pointerleave", () => { st.hover = -1; hideTooltip(); });
+  cv.addEventListener("wheel", (e) => {
+    e.preventDefault(); const rect = cv.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const f = Math.exp(-e.deltaY * 0.0016); st.view.x = mx - (mx - st.view.x) * f; st.view.y = my - (my - st.view.y) * f; st.view.k *= f; draw();
+  }, { passive: false });
+  return { draw, resize, refit: () => { fit(); draw(); }, ensure: () => { resize(); if (!st.view) fit(); draw(); } };
+}
+
+/* ---- refusal sub-page ---- */
+function renderTestRefusal(body, page) {
+  const st = T.refusal;
+  const split = el("div", "test-split");
+  const vizWrap = el("div", "test-viz");
+  const legend = el("div", "test-legend");
+  legend.append(Object.assign(el("div", "lg-row"), { textContent: "colour = member refusal rate" }));
+  legend.append(el("div", "lg-ramp"));
+  const lr1 = el("div", "lg-row"); lr1.append(el("span", "lg-ring")); lr1.append(document.createTextNode("refusal region")); legend.append(lr1);
+  const lr2 = el("div", "lg-row"); lr2.append(el("span", "lg-ring null")); lr2.append(document.createTextNode("matched null")); legend.append(lr2);
+  const lr3 = el("div", "lg-row"); const nd = el("span", "lg-ring"); nd.style.borderColor = "var(--neighbor)"; lr3.append(nd); lr3.append(document.createTextNode("nearest regions")); legend.append(lr3);
+  vizWrap.append(legend);
+  vizWrap.append(Object.assign(el("div", "test-hint"), { textContent: "drag to pan · scroll to zoom · click a region — 2D layout is approximate, panel cosines are exact" }));
+  const panel = el("div", "test-panel");
+  split.append(vizWrap, panel); body.append(split);
+
+  const scat = makeScatter(vizWrap, page, st, {
+    radiusOf: (r, isSel) => 3 + Math.min(6, Math.sqrt(r.nf) * 0.28) + (isSel ? 1 : 0),
+    colorOf: (r) => rampColor(r.rr),
+    ringOf: (r) => r.role,
+    labelOf: (r, ring) => (ring === "null" ? "null #" + r.i : "refusal #" + r.i),
+    onPick: (i) => { st.sel = i; scat.draw(); renderRefusalPanel(panel, page, i, scat); },
+    onHover: (i, cx, cy) => { const r = page.regions[i]; tooltip.textContent = ""; tooltip.append(el("div", "tt-id", "Region #" + i + " · refusal " + pctT(r.rr))); if (r.sample[0]) tooltip.append(Object.assign(el("div", "tt-txt"), { textContent: r.sample[0].t.slice(0, 90) })); tooltip.style.display = "block"; tooltip.style.left = Math.min(innerWidth - tooltip.offsetWidth - 10, cx + 14) + "px"; tooltip.style.top = Math.max(6, cy + 14) + "px"; },
+  });
+  T.refusal._scat = scat;
+  if (st.sel < 0) st.sel = page.sel != null ? page.sel : -1;
+  renderRefusalPanel(panel, page, st.sel, scat);
+  requestAnimationFrame(() => scat.ensure());
+}
+
+function renderRefusalPanel(panel, page, i, scat) {
+  panel.textContent = "";
+  if (i < 0) { panel.append(Object.assign(el("div", "tp-empty"), { textContent: "Click a region on the map. The refusal region and its size-matched null are ringed; select either to see how ablating it changes held-out refusal." })); return; }
+  const r = page.regions[i];
+  const head = section();
+  if (r.role) { const tags = el("div", "tp-tags"); tags.append(el("span", "tp-tag " + r.role, r.role === "null" ? "matched null" : "refusal region")); head.append(tags); }
+  head.append(el("div", "tp-title", "Region #" + i));
+  const stats = el("div", "tp-stats");
+  const mk = (k, v) => { const s = el("div", "tp-stat"); s.append(el("div", "k", k)); s.append(el("div", "v", v)); return s; };
+  stats.append(mk("Refusal rate", pctT(r.rr)));
+  stats.append(mk("Members", fmt(r.nf) + " / " + fmt(r.n)));
+  stats.append(mk("Coherence", r.coh.toFixed(2)));
+  stats.append(mk("Nearest cos", r.nb[0] ? r.nb[0][1].toFixed(2) : "—"));
+  head.append(stats); panel.append(head);
+
+  if (r.role === "refusal" || (r.role === "null" && page.null)) {
+    const ab = section();
+    ab.append(el("div", "tp-sec", r.role === "refusal" ? "Ablating this region" : "Ablating this null region"));
+    ab.append(abarRowT("<b>baseline</b>", page.baseline, null, null));
+    if (r.role === "refusal") { for (const [b, sw] of Object.entries(page.sweeps)) { const last = sw[sw.length - 1]; ab.append(abarRowT("ablate <b>" + b + "</b>", last.rate, last.delta, null)); } }
+    else { for (const [b, e] of Object.entries(page.null.by_basis)) ab.append(abarRowT("ablate <b>" + b + "</b>", e.rate, e.delta, "null")); }
+    const cap = el("div", "test-note-inline");
+    cap.textContent = r.role === "refusal"
+      ? "Projecting activations off this region's direction lowers held-out refusal; the matched null does nothing (Δ≈0) — the effect is specific but modest."
+      : "This region is size- and coherence-matched to the refusal region but ablating it leaves refusal unchanged — the specificity control.";
+    ab.append(cap); panel.append(ab);
+  }
+
+  const pr = section();
+  pr.append(el("div", "tp-sec", "Prompts that landed here"));
+  if (!r.sample.length) pr.append(Object.assign(el("div", "tp-prompt"), { textContent: "—" }));
+  for (const s of r.sample) { const p = el("div", "tp-prompt"); p.append(el("span", "d", "d " + s.d.toFixed(2))); p.append(document.createTextNode(s.t)); pr.append(p); }
+  panel.append(pr);
+
+  const nb = section();
+  nb.append(el("div", "tp-sec", "Nearest regions · exact cosine"));
+  for (const pair of r.nb) {
+    const j = pair[0], cos = pair[1], row = el("div", "nbrow");
+    row.append(el("span", "nid", "#" + j));
+    const bw = el("div", "barwrap"); const bar = el("div", "bar"); bar.style.width = Math.max(3, cos * 100) + "%"; bw.append(bar); row.append(bw);
+    row.append(el("span", "cos", cos.toFixed(3)));
+    row.onclick = () => { T.refusal.sel = j; scat.draw(); renderRefusalPanel(panel, page, j, scat); };
+    nb.append(row);
+  }
+  panel.append(nb);
+}
+
+/* ---- concept sub-page ---- */
+function renderTestConcept(body, page) {
+  const st = T.concept;
+  const split = el("div", "test-split");
+  const vizWrap = el("div", "test-viz");
+  const legend = el("div", "test-legend");
+  legend.append(Object.assign(el("div", "lg-row"), { textContent: "colour = region size (log)" }));
+  legend.append(el("div", "lg-ramp"));
+  const lr = el("div", "lg-row"); lr.append(el("span", "lg-ring")); lr.append(document.createTextNode("selected concept's region")); legend.append(lr);
+  vizWrap.append(legend);
+  vizWrap.append(Object.assign(el("div", "test-hint"), { textContent: "each dot is a region of the p=" + page.p + " dictionary (" + fmt(page.K) + ") · click a region or a concept" }));
+  const panel = el("div", "test-panel"); panel.id = "cPanel";
+  split.append(vizWrap, panel); body.append(split);
+
+  const logs = page.regions.map((r) => Math.log10(r.n));
+  const lo = Math.min(...logs), hi = Math.max(...logs);
+  const conceptRegion = new Set(page.concepts.map((c) => c.region));
+  const scat = makeScatter(vizWrap, page, st, {
+    radiusOf: (r, isSel) => (conceptRegion.has(r.i) ? 3.4 : 2.4) + (isSel ? 3 : 0),
+    colorOf: (r) => rampColor(hi > lo ? (Math.log10(r.n) - lo) / (hi - lo) : 0.5),
+    ringOf: (r) => (page.concepts[st.ci] && r.i === page.concepts[st.ci].region ? "sel" : null),
+    labelOf: () => null,
+    onPick: (i) => { st.sel = i; const ci = page.concepts.findIndex((c) => c.region === i); if (ci >= 0) st.ci = ci; scat.draw(); renderConceptPanel(panel, page, scat); },
+    onHover: (i, cx, cy) => { const r = page.regions[i]; const c = page.concepts.find((c) => c.region === i); tooltip.textContent = ""; tooltip.append(el("div", "tt-id", "Region #" + i + " · " + fmt(r.n) + " members")); if (c) tooltip.append(Object.assign(el("div", "tt-txt"), { textContent: c.label })); tooltip.style.display = "block"; tooltip.style.left = Math.min(innerWidth - tooltip.offsetWidth - 10, cx + 14) + "px"; tooltip.style.top = Math.max(6, cy + 14) + "px"; },
+  });
+  T.concept._scat = scat;
+  st.sel = page.concepts[st.ci] ? page.concepts[st.ci].region : -1;
+  renderConceptPanel(panel, page, scat);
+  requestAnimationFrame(() => scat.ensure());
+}
+
+function renderConceptPanel(panel, page, scat) {
+  panel.textContent = "";
+  const st = T.concept;
+
+  const t1 = section();
+  t1.append(el("div", "tp-sec", "Mean AUROC · " + page.n_concepts + " concepts · L" + page.layer));
+  const tbl = el("table", "auroc-tbl");
+  const bases = Object.keys(page.by_basis);
+  const hr = el("tr"); hr.append(el("th", null, "p")); hr.append(el("th", null, "regions")); bases.forEach((b) => hr.append(el("th", null, b))); tbl.append(hr);
+  for (const row of page.table) {
+    const tr = el("tr"); tr.append(el("td", null, "p" + row.p)); tr.append(el("td", null, row.K.toLocaleString()));
+    const vals = bases.map((b) => row.by_basis[b]); const best = Math.max(...vals);
+    bases.forEach((b) => tr.append(el("td", row.by_basis[b] === best ? "win" : null, row.by_basis[b].toFixed(3))));
+    tbl.append(tr);
+  }
+  t1.append(tbl);
+  t1.append(Object.assign(el("div", "test-note-inline"), { textContent: page.note }));
+  panel.append(t1);
+
+  const t2 = section();
+  t2.append(el("div", "tp-sec", "Concepts · p" + page.p));
+  const search = el("input", "csearch"); search.type = "search"; search.placeholder = "filter concepts…"; search.value = st.q;
+  t2.append(search);
+  const list = el("div", "clist");
+  function paintList() {
+    list.textContent = "";
+    const q = st.q.toLowerCase();
+    page.concepts.forEach((c, ci) => {
+      if (q && !c.label.toLowerCase().includes(q)) return;
+      const row = el("div", "crow" + (ci === st.ci ? " active" : ""));
+      row.append(Object.assign(el("div", "clab"), { textContent: c.label }));
+      row.append(el("div", "cauc", c.auroc.toFixed(2)));
+      row.onclick = () => { st.ci = ci; st.sel = c.region; scat.draw(); renderConceptPanel(panel, page, scat); };
+      list.append(row);
+    });
+    if (!list.children.length) list.append(Object.assign(el("div", "tp-empty"), { textContent: "no match" }));
+  }
+  search.addEventListener("input", (e) => { st.q = e.target.value; paintList(); });
+  paintList(); t2.append(list); panel.append(t2);
+
+  // selected region / concept detail
+  const c = page.concepts[st.ci];
+  const selRegion = st.sel;
+  const t3 = section();
+  if (c && c.region === selRegion) {
+    t3.append(el("div", "tp-sec", "Detector output · region #" + c.region + " · AUROC " + c.auroc.toFixed(3)));
+    if (c.examples && c.examples.length) {
+      const out = el("div", "detout");
+      for (const e of c.examples) {
+        const row = el("div", "detrow");
+        row.append(el("div", "yd " + (e.y ? "pos" : "neg"), e.y ? "+" : "−"));
+        row.append(Object.assign(el("div", "dtxt"), { textContent: e.t }));
+        row.append(el("div", "dsc", e.s.toFixed(2)));
+        out.append(row);
+      }
+      t3.append(out);
+      t3.append(Object.assign(el("div", "test-note-inline"), { innerHTML: "<b>+</b> held-out positive, <b>−</b> contrastive negative; score = max cosine onto region #" + c.region + ". Clean separation → high AUROC." }));
+    } else t3.append(Object.assign(el("div", "test-note-inline"), { textContent: "Per-example detail was exported for the highest-AUROC concepts only. This concept's region still highlights on the map." }));
+  } else if (selRegion >= 0) {
+    const r = page.regions[selRegion];
+    t3.append(el("div", "tp-sec", "Region #" + selRegion));
+    const stats = el("div", "tp-stats");
+    const mk = (k, v) => { const s = el("div", "tp-stat"); s.append(el("div", "k", k)); s.append(el("div", "v", v)); return s; };
+    stats.append(mk("Members", fmt(r.n)));
+    stats.append(mk("Coherence", r.coh.toFixed(2)));
+    stats.append(mk("Nearest cos", r.nb[0] ? r.nb[0][1].toFixed(2) : "—"));
+    stats.append(mk("Concept", "—"));
+    t3.append(stats);
+    t3.append(Object.assign(el("div", "test-note-inline"), { textContent: "No concept selected this region. Pick a concept above to see the region it fired on and its detector scores." }));
+  } else {
+    t3.append(Object.assign(el("div", "tp-empty"), { textContent: "Click a concept or a region." }));
+  }
+  panel.append(t3);
+}
+
+/* ---- testing shell ---- */
+function testInfoText() {
+  if (state.testMode === "concept") return {
+    title: "Concept detection",
+    body: "For each AxBench concept, the region with the largest positive-minus-contrastive cosine gap on a train split is selected, then scored on held-out examples (AUROC). The dictionary is unsupervised — built on the Pile, never shown concept labels. Because AxBench concepts were mined from Gemma SAE labels, these numbers are a re-derivation on Qwen, not leaderboard-comparable. The exemplar-vs-mean ordering flips with resolution — the reverse of the paper's Gemma trend."
+  };
+  return {
+    title: "Refusal localization",
+    body: "An EP dictionary is built on 300 harmful (AdvBench + JailbreakBench) + 300 benign (Alpaca) chat prompts at the final residual layer. Each prompt is assigned to a region and its greedy generation scored by a substring refusal classifier, giving a per-region refusal rate. Refusal concentrates in a single region (#" + (DATA.testing.refusal ? DATA.testing.refusal.sel : "?") + "). Projecting held-out harmful activations off its direction lowers refusal by a modest, specific margin — a size-and-coherence-matched null does nothing. The effect on generated text was small, so the response transcript is omitted for now."
+  };
+}
+function showTestInfo() {
+  let m = $("#testInfoModal");
+  if (!m) {
+    m = el("div"); m.id = "testInfoModal"; m.setAttribute("role", "dialog");
+    Object.assign(m.style, { position: "fixed", inset: "0", display: "none", placeItems: "center", background: "color-mix(in srgb, #000 46%, transparent)", zIndex: "60", padding: "20px" });
+    const card = el("div"); card.className = "modal-card"; m.append(card);
+    m.addEventListener("click", (e) => { if (e.target === m) m.style.display = "none"; });
+    document.body.append(m);
+  }
+  const info = testInfoText(); const card = m.firstChild; card.textContent = "";
+  const close = el("button", "close iconbtn", "✕"); close.onclick = () => (m.style.display = "none"); card.append(close);
+  card.append(el("h2", null, info.title));
+  card.append(Object.assign(el("p"), { textContent: info.body }));
+  m.style.display = "grid";
+}
+
+function buildTestTools() {
+  const tools = $("#testTools"); tools.textContent = "";
+  tools.append(el("span", "ctl-label", "Layout"));
+  const seg = el("div", "seg");
+  [["pca", "PCA"], ["tsne", "t-SNE"]].forEach(([k, lab]) => {
+    const b = el("button", null, lab); b.setAttribute("aria-pressed", String(state.testLayout === k));
+    b.onclick = () => { state.testLayout = k; seg.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); const sc = T[state.testMode]._scat; if (sc) sc.refit(); };
+    seg.append(b);
+  });
+  tools.append(seg);
+}
+
+function setTestMode(m) {
+  state.testMode = m;
+  document.querySelectorAll("#testSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.test === m)));
+  pushHash(); renderTesting();
+}
+
+function renderTesting() {
+  const t = DATA.testing;
+  document.querySelectorAll("#testSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.test === state.testMode)));
+  buildTestTools();
+  const body = $("#testBody"); body.textContent = ""; body.style.flexDirection = "row";
+  if (!t) { body.append(Object.assign(el("div", "tp-empty"), { textContent: "No testing results bundled into this build." })); return; }
+  if (state.testMode === "concept" && t.concept) renderTestConcept(body, t.concept);
+  else if (t.refusal) renderTestRefusal(body, t.refusal);
+  else body.append(Object.assign(el("div", "tp-empty"), { textContent: "This test was not bundled." }));
+}
+
+function renderStatus() {
+  const d = cur(), f = $("#statusBar");
+  f.textContent = "";
+  if (state.mode === "testing") {
+    const t = DATA.testing || {};
+    const bits = [];
+    if (state.testMode === "concept" && t.concept)
+      bits.push(["Concept detection", t.concept.model + " · L" + t.concept.layer + " · " + t.concept.n_concepts + " concepts"]);
+    else if (t.refusal)
+      bits.push(["Refusal ablation", t.refusal.model + " · L" + t.refusal.layer + " · p" + t.refusal.p]);
+    bits.forEach(([k, v]) => {
+      const s = el("span"); s.append(k + " "); s.append(el("b", null, v)); f.append(s);
+    });
+    return;
+  }
+  const bits = [
+    ["Model", d.model + " · L" + d.layer], ["p", String(d.p)],
+    ["Regions", fmt(d.K)], ["Activations", fmt(d.nActs)],
+    ["θ", d.threshold.toFixed(3)], ["Largest", fmt(d.largest)],
+    ["Corpus", d.corpus],
+  ];
+  if (d.jlens) bits.push(["J-lens", "fitted L" + d.jlens.layer]);
+  bits.forEach(([k, v]) => {
+    const s = el("span"); s.append(k + " "); s.append(el("b", null, v)); f.append(s);
+  });
+  if (!d.edges.length) {
+    const n = el("span", null, "Voronoi arcs omitted at this K");
+    n.style.color = "var(--muted)"; f.append(n);
+  }
+}
+function updateColorControls() {
+  const d = cur(), der = derived[state.dict];
+  const hasJ = !!d.jlens;
+  if (!hasJ && state.colorBy === "jv") state.colorBy = "n";
+  $("#colorLbl").style.display = hasJ ? "" : "none";
+  $("#colorSeg").style.display = hasJ ? "" : "none";
+  $("#colorSeg").querySelectorAll("button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.color === state.colorBy)));
+  const byJv = state.colorBy === "jv" && der.jvT;
+  document.querySelectorAll(".ramp-name").forEach((e) =>
+    e.textContent = byJv ? "verbalizability" : "members");
+  if (byJv) {
+    $("#rampLo").textContent = Math.min(...d.regions.map((r) => r.jv)).toFixed(2);
+    $("#rampHi").textContent = Math.max(...d.regions.map((r) => r.jv)).toFixed(2);
+  } else {
+    $("#rampLo").textContent = fmt(Math.min(...d.regions.map((r) => r.n)));
+    $("#rampHi").textContent = fmt(Math.max(...d.regions.map((r) => r.n)));
+  }
+}
+function switchDict(i) {
+  state.dict = i; state.sel = -1; atlas.fitted = false;
+  const d = cur();
+  $("#sphereNote").textContent = d.edges.length ? "" : "arcs omitted (K > 800)";
+  updateColorControls();
+  $("#atlasLabels").checked = d.K <= 600;
+  pushHash(); redraw();
+}
+$("#colorSeg").querySelectorAll("button").forEach((b) =>
+  b.addEventListener("click", () => {
+    state.colorBy = b.dataset.color;
+    updateColorControls(); drawAtlas(); drawSphere();
+  }));
+
+/* ------------------------------------------------ events */
+$("#dictSel").addEventListener("change", (e) => switchDict(+e.target.value));
+document.querySelectorAll("nav.tabs button").forEach((b) =>
+  b.addEventListener("click", () => setMode(b.dataset.mode)));
+$("#layoutSeg").querySelectorAll("button").forEach((b) =>
+  b.addEventListener("click", () => {
+    state.layout = b.dataset.layout;
+    $("#layoutSeg").querySelectorAll("button").forEach((x) =>
+      x.setAttribute("aria-pressed", String(x === b)));
+    atlas.fitted = false; drawAtlas();
+  }));
+$("#atlasLabels").addEventListener("change", drawAtlas);
+$("#sphereEdges").addEventListener("change", drawSphere);
+$("#sphereLabels").addEventListener("change", drawSphere);
+
+const tooltip = $("#tooltip");
+function showTooltip(i, x, y) {
+  const d = cur(), r = d.regions[i];
+  tooltip.textContent = "";
+  tooltip.append(el("div", "tt-id", "Region #" + i + " · " + fmt(r.n) + " members"
+    + (r.jv !== undefined ? " · verb " + r.jv.toFixed(2) : "")));
+  tooltip.append(Object.assign(el("div", "tt-lens mono"), { textContent: lensPreview(r, 4) }));
+  if (r.jl) tooltip.append(Object.assign(el("div", "tt-jlens mono"), { textContent: "J: " + tokPreview(r.jl, 4) }));
+  if (r.sm[0]) tooltip.append(Object.assign(el("div", "tt-txt"), { textContent: r.sm[0].t.slice(0, 110) }));
+  tooltip.style.display = "block";
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  tooltip.style.left = Math.min(innerWidth - tw - 10, x + 14) + "px";
+  tooltip.style.top = Math.max(6, Math.min(innerHeight - th - 10, y + 14)) + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+function bindCanvas(cv, pick, onDrag, onWheel, draw) {
+  let dragging = false, moved = false, lx = 0, ly = 0;
+  cv.addEventListener("pointerdown", (e) => {
+    dragging = true; moved = false; lx = e.clientX; ly = e.clientY;
+    cv.classList.add("dragging"); cv.setPointerCapture(e.pointerId);
+    sphere.spin = false;
+  });
+  cv.addEventListener("pointermove", (e) => {
+    const rect = cv.getBoundingClientRect();
+    if (dragging) {
+      const dx = e.clientX - lx, dy = e.clientY - ly;
+      if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+      onDrag(dx, dy); lx = e.clientX; ly = e.clientY;
+      hideTooltip(); draw();
+    } else {
+      const i = pick(e.clientX - rect.left, e.clientY - rect.top);
+      if (i !== hoverIdx) { hoverIdx = i; draw(); }
+      if (i >= 0) showTooltip(i, e.clientX, e.clientY); else hideTooltip();
+    }
+  });
+  cv.addEventListener("pointerup", (e) => {
+    dragging = false; cv.classList.remove("dragging");
+    if (!moved) {
+      const rect = cv.getBoundingClientRect();
+      const i = pick(e.clientX - rect.left, e.clientY - rect.top);
+      state.sel = i >= 0 ? i : -1;
+      pushHash(); redraw();
+    }
+  });
+  cv.addEventListener("pointerleave", () => { hoverIdx = -1; hideTooltip(); draw(); });
+  cv.addEventListener("wheel", (e) => { e.preventDefault(); onWheel(e); hideTooltip(); draw(); }, { passive: false });
+}
+
+bindCanvas(atlas.canvas, atlasPick,
+  (dx, dy) => { atlas.view.x += dx; atlas.view.y += dy; },
+  (e) => {
+    const rect = atlas.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const f = Math.exp(-e.deltaY * 0.0016);
+    atlas.view.x = mx - (mx - atlas.view.x) * f;
+    atlas.view.y = my - (my - atlas.view.y) * f;
+    atlas.view.k *= f;
+  },
+  drawAtlas);
+
+bindCanvas(sphere.canvas, spherePick,
+  (dx, dy) => {
+    sphere.yaw += dx * 0.006;
+    sphere.pitch = Math.max(-1.5, Math.min(1.5, sphere.pitch + dy * 0.006));
+  },
+  (e) => { sphere.zoom = Math.max(0.4, Math.min(3, sphere.zoom * Math.exp(-e.deltaY * 0.0014))); },
+  drawSphere);
+
+$("#themeBtn").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const now = root.dataset.theme || (dark ? "dark" : "light");
+  root.dataset.theme = now === "dark" ? "light" : "dark";
+  refreshRamp(); redraw();
+});
+$("#aboutBtn").addEventListener("click", () => $("#aboutModal").classList.add("open"));
+$("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.remove("open"));
+$("#aboutModal").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+});
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape") $("#aboutModal").classList.remove("open");
+  if (e.target.tagName === "INPUT") return;
+  if (state.mode === "region") {
+    if (e.key === "ArrowLeft") selectRegion((state.sel - 1 + cur().K) % cur().K);
+    if (e.key === "ArrowRight") selectRegion((state.sel + 1) % cur().K);
+  }
+});
+addEventListener("resize", () => { atlas.fitted = false; redraw(); });
+addEventListener("hashchange", () => { applyHash(); syncControls(); redraw(); });
+
+/* ------------------------------------------------ boot */
+function syncControls() {
+  $("#dictSel").value = String(state.dict);
+  document.querySelectorAll("nav.tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.mode === state.mode)));
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  $("#view-" + state.mode).classList.add("active");
+}
+(function boot() {
+  // Hide the Testing tab unless results were bundled into this build.
+  if (!DATA.testing || (!DATA.testing.refusal && !DATA.testing.concept)) {
+    const t = document.querySelector('nav.tabs button[data-mode="testing"]');
+    if (t) t.style.display = "none";
+    if (state.mode === "testing") state.mode = "atlas";
+  }
+  // Testing sub-nav + info wiring.
+  document.querySelectorAll("#testSeg button").forEach((b) =>
+    b.addEventListener("click", () => setTestMode(b.dataset.test)));
+  $("#testInfo").addEventListener("click", showTestInfo);
+  const sel = $("#dictSel");
+  DATA.dicts.forEach((d, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = `${d.model} · L${d.layer} · p=${d.p} (${fmt(d.K)} regions)`;
+    sel.append(o);
+  });
+  refreshRamp();
+  applyHash();
+  syncControls();
+  const d = cur();
+  updateColorControls();
+  $("#sphereNote").textContent = d.edges.length ? "" : "arcs omitted (K > 800)";
+  $("#atlasLabels").checked = d.K <= 600;
+  redraw();
+  spinTick();
+})();
+</script>
+</body>
+</html>

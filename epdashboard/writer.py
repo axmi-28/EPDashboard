@@ -31,13 +31,33 @@ from epdashboard.sequences import PromptCache, build_groups
 from epdashboard.vectors import write_vectors
 
 
-def nearest_regions(E: np.ndarray, k: int) -> list[list]:
-    """Top-k neighbors by full-space cosine between exemplar directions."""
-    sims = E @ E.T
-    np.fill_diagonal(sims, -np.inf)
-    idx = np.argsort(-sims, axis=1)[:, :k]
-    return [[[int(j), round(float(sims[i, j]), 3)] for j in idx[i]]
-            for i in range(len(E))]
+def nearest_regions(E: np.ndarray, k: int, chunk: int = 2048) -> list[list]:
+    """Top-k neighbors by full-space cosine between exemplar directions.
+
+    Chunked over rows, like ``geometry.nn_cosine``. The full (K, K) matrix is
+    3.6 GB at K=30000 and ``argsort`` allocates another 7.2 GB of int64 to rank
+    K columns when only ``k`` (8) are kept — ~14 GB transient, allocated after
+    the whole scan has already been paid for. ``argpartition`` on a row block
+    gets the same neighbours in a bounded working set.
+    """
+    out: list[list] = []
+    n = len(E)
+    for s in range(0, n, chunk):
+        sims = E[s:s + chunk] @ E.T
+        rows = np.arange(len(sims))
+        sims[rows, rows + s] = -np.inf          # a region is not its own neighbour
+        kk = min(k, n - 1)
+        # argpartition needs kth < n; kk == n - 1 means "everything else", for
+        # which the partition is a no-op and the sort below does all the work.
+        part = (np.argpartition(-sims, kk, axis=1)[:, :kk] if kk < n - 1
+                else np.argsort(-sims, axis=1)[:, :kk])
+        vals = np.take_along_axis(sims, part, axis=1)
+        order = np.argsort(-vals, axis=1)
+        part = np.take_along_axis(part, order, axis=1)
+        vals = np.take_along_axis(vals, order, axis=1)
+        out.extend([[int(j), round(float(v), 3)] for j, v in zip(pi, vi)]
+                   for pi, vi in zip(part, vals))
+    return out
 
 
 def dict_p(d: EPDict) -> float | None:
