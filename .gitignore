@@ -25,3 +25,10 @@ qwen_ep/*
 
 # --- experiments: persona assets are vendored from the paper's repo ---
 experiments/persona/assets/
+
+experiments/
+docs/
+dict_view/
+modal/refusal.py
+modal/rmu_diff.py
+!qwen_ep/acts_dtype.py
